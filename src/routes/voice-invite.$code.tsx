@@ -130,6 +130,11 @@ function VoiceInvitePage() {
 
       await room.connect(url, token);
       await room.localParticipant.setMicrophoneEnabled(true);
+      try {
+        await room.startAudio();
+      } catch {
+        /* will retry on next user gesture */
+      }
       roomRef.current = room;
       refreshParticipants(room);
       playJoinSound();
@@ -142,6 +147,7 @@ function VoiceInvitePage() {
 
   const leave = async () => {
     await roomRef.current?.disconnect();
+    document.querySelectorAll("audio[data-lk-audio]").forEach((el) => el.remove());
     roomRef.current = null;
     setParticipants([]);
     playLeaveSound();
