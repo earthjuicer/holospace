@@ -9,6 +9,8 @@ import { MobileHeader } from './MobileHeader';
 import { SearchPalette } from './SearchPalette';
 import { Onboarding } from './Onboarding';
 import { IncomingRing } from './IncomingRing';
+import { VoiceStatusBar } from './VoiceStatusBar';
+import { VoiceRoomProvider } from '@/hooks/voice-room-context';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Toaster } from 'sonner';
 
@@ -137,7 +139,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
+    <VoiceRoomProvider>
       <div className="flex h-[100dvh] w-full overflow-hidden">
         {!isMobile && <AppSidebar />}
         <div className="flex-1 flex flex-col min-w-0">
@@ -153,7 +155,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <SearchPalette />
       <Onboarding />
       <IncomingRing />
+      <VoiceStatusBar />
       <Toaster position="top-center" />
-    </>
+    </VoiceRoomProvider>
   );
 }

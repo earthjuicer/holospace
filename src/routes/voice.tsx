@@ -10,7 +10,8 @@ import {
 import { toast } from "sonner";
 import { ringChannel, ringUser } from "@/lib/ring-actions";
 import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
-import { useLiveKitRoom, type VoiceParticipantInfo } from "@/hooks/use-livekit-room";
+import { type VoiceParticipantInfo } from "@/hooks/use-livekit-room";
+import { useVoiceRoom } from "@/hooks/voice-room-context";
 import { ScreenShareControls } from "@/components/ScreenShareControls";
 import { ScreenShareViewer } from "@/components/ScreenShareViewer";
 import { ChannelSidebar, type SidebarChannel } from "@/components/ChannelSidebar";
@@ -50,7 +51,10 @@ function VoicePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { join: joinCode, channelId: pendingChannelId } = Route.useSearch();
-  const [activeChannel, setActiveChannel] = useState<SidebarChannel | null>(null);
+  // Voice room state lives in a global provider so the connection survives
+  // route changes — users now stay in the channel until they hit "Leave".
+  const lk = useVoiceRoom();
+  const { activeChannel, setActiveChannel } = lk;
   const [isDeafened, setIsDeafened] = useState(false);
   const [pttActive, setPttActive] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -66,8 +70,6 @@ function VoicePage() {
   const [volumes, setVolumes] = useState<Record<string, number>>({});
   const lastChannelRef = useRef<string | null>(null);
   const pttHoldingRef = useRef(false);
-
-  const lk = useLiveKitRoom();
 
   // Tick every 30s to refresh expiry countdown
   useEffect(() => {
@@ -300,7 +302,7 @@ function VoicePage() {
                     In voice — {lk.participants.length}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {lk.participants.map((p) => {
+                    {lk.participants.map((p: VoiceParticipantInfo) => {
                       const vol = volumes[p.identity] ?? 100;
                       const card = (
                         <div
@@ -422,7 +424,7 @@ function VoicePage() {
                       return <div key={p.identity}>{withPopover}</div>;
                     })}
                   </div>
-                  {isCreator && lk.participants.some((p) => !p.isLocal) && (
+                  {isCreator && lk.participants.some((p: VoiceParticipantInfo) => !p.isLocal) && (
                     <p className="text-[10px] text-muted-foreground/60 mt-3">
                       Tip: right-click a participant to kick or ban them.
                     </p>
