@@ -66,7 +66,7 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 }
 
-export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenUpload = false }: Props) {
+export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenUpload = false, canUpload = true }: Props) {
   const [files, setFiles] = useState<FolderFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploads, setUploads] = useState<Record<string, InFlightUpload>>({});
