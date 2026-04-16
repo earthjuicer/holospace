@@ -137,7 +137,12 @@ function TextChannelPage() {
 
   return (
     <div className="flex h-full">
-      <ChannelSidebar activeTextId={channelId} onJoinVoice={() => {}} />
+      <ChannelSidebar
+        activeTextId={channelId}
+        onJoinVoice={(ch) =>
+          navigate({ to: "/voice", search: { channelId: ch.id } })
+        }
+      />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
