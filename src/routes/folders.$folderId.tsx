@@ -125,25 +125,49 @@ function FolderDetailPage() {
   const shareActive = share && new Date(share.expires_at).getTime() > Date.now();
   const shareUrl = share ? `${window.location.origin}/share/${share.token}` : "";
 
-  const generateOrRegen = async (value: ExpiryValue = expiry) => {
+  const generateOrRegen = async (value: ExpiryValue = expiry, allowUpload?: boolean) => {
     const opt = EXPIRY_OPTIONS.find((o) => o.value === value) ?? EXPIRY_OPTIONS[1];
+    const nextAllowUpload = allowUpload ?? share?.allow_upload ?? true;
     setGenerating(true);
     const { data, error } = await supabase.rpc("regen_share_token", {
       _folder_id: folderId,
       _expires_in: opt.interval,
+      _allow_upload: nextAllowUpload,
     });
     setGenerating(false);
     if (error || !data?.[0]) {
       toast.error(error?.message || "Failed to generate link");
       return;
     }
-    setShare({ token: data[0].token, expires_at: data[0].expires_at });
+    setShare({
+      token: data[0].token,
+      expires_at: data[0].expires_at,
+      allow_upload: data[0].allow_upload,
+    });
     setExpiry(value);
     toast.success(
       value === "never"
         ? "Share link generated — never expires"
         : `New share link · expires in ${opt.label.toLowerCase()}`
     );
+  };
+
+  const toggleAllowUpload = async () => {
+    if (!share) return;
+    const next = !share.allow_upload;
+    // Optimistic UI
+    setShare({ ...share, allow_upload: next });
+    const { error } = await supabase.rpc("set_share_allow_upload", {
+      _folder_id: folderId,
+      _allow_upload: next,
+    });
+    if (error) {
+      // Revert
+      setShare({ ...share });
+      toast.error(error.message || "Failed to update permission");
+      return;
+    }
+    toast.success(next ? "Visitors can now upload" : "Link is now read-only");
   };
 
   // Revoke the public share immediately by deleting the row. The /share/:token
