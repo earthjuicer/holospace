@@ -422,6 +422,7 @@ function takeSnapshot(s: AppState): SyncedSnapshot {
 
 async function pushToBackend(userId: string) {
   const snapshot = takeSnapshot(useAppStore.getState());
+  lastPushedAt = Date.now();
   // Cast through `any` because Supabase's generated jsonb type is overly
   // restrictive (Json) — we genuinely store a structured snapshot here.
   const { data, error } = await supabase
@@ -435,6 +436,21 @@ async function pushToBackend(userId: string) {
   if (!error && data?.updated_at) {
     lastBackendUpdatedAt = data.updated_at;
   }
+}
+
+/** Apply a backend snapshot to local state. Called on initial pull and on
+ *  realtime updates from other devices. */
+function applyBackendSnapshot(snapshot: Partial<SyncedSnapshot>, updatedAt: string | null) {
+  useAppStore.setState((s) => ({
+    ...s,
+    documents: snapshot.documents ?? s.documents,
+    columns: snapshot.columns ?? s.columns,
+    tasks: snapshot.tasks ?? s.tasks,
+    events: snapshot.events ?? s.events,
+    settings: { ...s.settings, ...(snapshot.settings ?? {}) },
+    onboardingComplete: snapshot.onboardingComplete ?? s.onboardingComplete,
+  }));
+  lastBackendUpdatedAt = updatedAt;
 }
 
 function schedulePush(userId: string) {
