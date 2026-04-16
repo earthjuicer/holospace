@@ -7,6 +7,7 @@ import {
   Mic, MicOff, Headphones, PhoneOff, Plus, Users, Volume2, Hash, Link2, Copy, Check,
 } from "lucide-react";
 import { toast } from "sonner";
+import { playJoinSound, playLeaveSound } from "@/lib/voice-sounds";
 
 export const Route = createFileRoute("/voice")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -154,6 +155,13 @@ function VoicePage() {
         Object.values(state).forEach((arr) => arr.forEach((p) => list.push(p)));
         setParticipants((prev) => ({ ...prev, [channelId]: list }));
       })
+      .on("presence", { event: "join" }, ({ key }) => {
+        // Don't play for our own join — that's handled below
+        if (key !== user.id) playJoinSound();
+      })
+      .on("presence", { event: "leave" }, ({ key }) => {
+        if (key !== user.id) playLeaveSound();
+      })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           await presenceCh.track({
@@ -166,6 +174,7 @@ function VoicePage() {
       });
 
     presenceChannelRef.current = presenceCh;
+    playJoinSound();
     toast.success("Joined voice channel");
   };
 
@@ -178,6 +187,7 @@ function VoicePage() {
     setActiveChannel(null);
     setIsMuted(false);
     setIsDeafened(false);
+    playLeaveSound();
     toast("Left voice channel");
   };
 
