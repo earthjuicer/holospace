@@ -31,7 +31,7 @@ export function BlockEditor({ doc }: BlockEditorProps) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [savedIndicator, setSavedIndicator] = useState(false);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const saveTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const triggerSave = useCallback(() => {
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
