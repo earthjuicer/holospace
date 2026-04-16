@@ -27,7 +27,7 @@ interface VoiceChannel {
   created_by: string;
   is_active: boolean;
   max_participants: number;
-  invite_code: string;
+  invite_code?: string; // only present for channels the user created
 }
 
 interface Participant {
@@ -83,7 +83,7 @@ function VoicePage() {
   const fetchChannels = async () => {
     const { data } = await supabase
       .from("voice_channels")
-      .select("*")
+      .select("id, name, created_by, is_active, max_participants")
       .eq("is_active", true)
       .order("created_at", { ascending: true });
     if (data) setChannels(data as VoiceChannel[]);
@@ -193,13 +193,24 @@ function VoicePage() {
     }
   }, [isMuted]);
 
-  const copyInviteLink = (channel: VoiceChannel, e: React.MouseEvent) => {
+  const copyInviteLink = async (channel: VoiceChannel, e: React.MouseEvent) => {
     e.stopPropagation();
-    const link = `${window.location.origin}/voice?join=${channel.invite_code}`;
+    if (channel.created_by !== user?.id) {
+      toast.error("Only the channel creator can share the invite link");
+      return;
+    }
+    const { data: code, error } = await supabase.rpc("get_channel_invite_code", {
+      _channel_id: channel.id,
+    });
+    if (error || !code) {
+      toast.error("Could not load invite code");
+      return;
+    }
+    const link = `${window.location.origin}/voice?join=${code}`;
     navigator.clipboard.writeText(link);
     setCopiedId(channel.id);
     toast.success("Invite link copied!", {
-      description: `Code: ${channel.invite_code}`,
+      description: `Code: ${code}`,
     });
     setTimeout(() => setCopiedId(null), 2000);
   };
