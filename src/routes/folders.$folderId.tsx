@@ -39,6 +39,7 @@ function formatRemaining(expiresAt: string) {
 
 function FolderDetailPage() {
   const { folderId } = Route.useParams();
+  const { upload } = Route.useSearch();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [folder, setFolder] = useState<Folder | null>(null);
