@@ -103,6 +103,103 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_runs: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          model: string
+          output: string | null
+          owner_id: string
+          prompt_id: string | null
+          rendered_input: string
+          status: string
+          variables: Json
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          model: string
+          output?: string | null
+          owner_id: string
+          prompt_id?: string | null
+          rendered_input: string
+          status?: string
+          variables?: Json
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          model?: string
+          output?: string | null
+          owner_id?: string
+          prompt_id?: string | null
+          rendered_input?: string
+          status?: string
+          variables?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_runs_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prompts: {
+        Row: {
+          content: string
+          created_at: string
+          description: string | null
+          folder_id: string | null
+          id: string
+          is_private: boolean
+          model: string
+          owner_id: string
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          description?: string | null
+          folder_id?: string | null
+          id?: string
+          is_private?: boolean
+          model?: string
+          owner_id: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          description?: string | null
+          folder_id?: string | null
+          id?: string
+          is_private?: boolean
+          model?: string
+          owner_id?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompts_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       voice_channels: {
         Row: {
           created_at: string
