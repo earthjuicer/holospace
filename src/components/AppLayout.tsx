@@ -1,6 +1,6 @@
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
-import { useAppStore } from '@/store/app-store';
+import { useAppStore, setUserScope } from '@/store/app-store';
 import { useAuth } from '@/hooks/use-auth';
 import { AppSidebar } from './AppSidebar';
 import { MobileTabBar } from './MobileTabBar';
@@ -18,8 +18,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [storeReady, setStoreReady] = useState(false);
 
   const isPublicRoute = PUBLIC_ROUTES.some((r) => location.pathname.startsWith(r));
+
+  // Swap the persisted store to the current user's bucket whenever auth
+  // changes. Each user (and signed-out anon) gets their own dashboard,
+  // documents, tasks, calendar, and settings on this device.
+  useEffect(() => {
+    if (loading) return;
+    let cancelled = false;
+    setStoreReady(false);
+    setUserScope(user?.id ?? null).then(() => {
+      if (!cancelled) setStoreReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user?.id]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -62,8 +78,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Not logged in — show nothing while redirecting
-  if (!user) {
+  // Not logged in, or store still rehydrating into the user's bucket — show spinner
+  if (!user || !storeReady) {
     return (
       <div className="flex h-[100dvh] w-full items-center justify-center bg-background">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />

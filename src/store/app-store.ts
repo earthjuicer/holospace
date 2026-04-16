@@ -377,9 +377,27 @@ export const useAppStore = create<AppState>()(
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
     }),
     {
-      name: 'notion-app-storage',
+      // Default name — will be swapped per-user via setUserScope() below.
+      name: 'notion-app-storage:anon',
       storage: createJSONStorage(() => ssrSafeStorage()),
       skipHydration: true,
     }
   )
 );
+
+/**
+ * Scope the persisted store to a specific user (or null for signed-out).
+ * Each user gets their own localStorage bucket so dashboards, docs, tasks,
+ * etc. don't leak across accounts on the same device.
+ */
+let currentUserScope: string | null = null;
+export async function setUserScope(userId: string | null): Promise<void> {
+  const next = userId ? `notion-app-storage:${userId}` : 'notion-app-storage:anon';
+  if (currentUserScope === next) return;
+  currentUserScope = next;
+
+  // Point persist middleware at the per-user storage key, then rehydrate
+  // from that bucket. If nothing is saved yet we keep the seeded defaults.
+  useAppStore.persist.setOptions({ name: next });
+  await useAppStore.persist.rehydrate();
+}
