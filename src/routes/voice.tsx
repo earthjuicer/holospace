@@ -225,7 +225,7 @@ function VoicePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28 }}
       >
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-start sm:items-center justify-between gap-3 mb-6 flex-col sm:flex-row">
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <Volume2 size={24} className="text-primary" />
@@ -237,7 +237,7 @@ function VoicePage() {
           </div>
           <button
             onClick={() => setShowCreate(!showCreate)}
-            className="pill-button gradient-accent text-white flex items-center gap-1.5"
+            className="pill-button gradient-accent text-white flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
           >
             <Plus size={16} /> New Channel
           </button>
