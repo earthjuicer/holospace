@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ZoomIn, ZoomOut, RotateCcw, Download, Loader2, Share2, Copy, Check } from "lucide-react";
+import { X, ZoomIn, ZoomOut, RotateCcw, Download, Loader2, Share2, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +23,10 @@ export interface PreviewFile {
 interface Props {
   file: PreviewFile | null;
   onClose: () => void;
+  /** Optional: pass the full list of files in the folder to enable prev/next navigation. */
+  siblings?: PreviewFile[];
+  /** Called when the user navigates to a sibling via arrows / keyboard. */
+  onNavigate?: (next: PreviewFile) => void;
 }
 
 const BUCKET = "folder-files";
