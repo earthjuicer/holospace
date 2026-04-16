@@ -3,10 +3,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Upload, File as FileIcon, Image as ImageIcon, Video, Music,
-  FileText, Download, Trash2, Loader2,
+  FileText, Download, Trash2, Loader2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadResumable } from "@/lib/resumable-upload";
+
+interface InFlightUpload {
+  id: string;
+  name: string;
+  size: number;
+  pct: number;
+  cancel?: () => void;
+}
 
 export interface FolderFile {
   id: string;
@@ -46,7 +54,7 @@ function formatBytes(bytes: number) {
 export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) {
   const [files, setFiles] = useState<FolderFile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploads, setUploads] = useState<Record<string, number>>({});
+  const [uploads, setUploads] = useState<Record<string, InFlightUpload>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -70,22 +78,36 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folderId, shareToken]);
 
+  const patchUpload = (id: string, patch: Partial<InFlightUpload>) =>
+    setUploads((u) => (u[id] ? { ...u, [id]: { ...u[id], ...patch } } : u));
+
+  const removeUpload = (id: string) =>
+    setUploads((u) => {
+      const next = { ...u };
+      delete next[id];
+      return next;
+    });
+
   const uploadFiles = async (fileList: FileList) => {
     for (const file of Array.from(fileList)) {
-      const tmpKey = `${file.name}-${Date.now()}`;
-      setUploads((u) => ({ ...u, [tmpKey]: 0 }));
+      const id = `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      setUploads((u) => ({
+        ...u,
+        [id]: { id, name: file.name, size: file.size, pct: 0 },
+      }));
       const safeName = file.name.replace(/[^\w.\-]/g, "_");
       const path = `${folderId}/${crypto.randomUUID()}-${safeName}`;
       const RESUMABLE_THRESHOLD = 6 * 1024 * 1024; // 6 MB — standard upload caps around 50MB
 
       try {
         if (file.size > RESUMABLE_THRESHOLD) {
-          // TUS resumable upload — required for files larger than ~50MB.
+          // TUS resumable upload — required for files larger than ~50 MB,
+          // and gives us per-chunk progress + cancellation.
           await uploadResumable({
             file,
             path,
-            onProgress: (pct) =>
-              setUploads((u) => ({ ...u, [tmpKey]: pct })),
+            onProgress: (pct) => patchUpload(id, { pct }),
+            onStart: (cancel) => patchUpload(id, { cancel }),
           });
         } else {
           const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
@@ -93,7 +115,7 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
             upsert: false,
           });
           if (upErr) throw upErr;
-          setUploads((u) => ({ ...u, [tmpKey]: 100 }));
+          patchUpload(id, { pct: 100 });
         }
 
         if (shareToken) {
@@ -121,13 +143,13 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
         toast.success(`Uploaded ${file.name}`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Upload failed";
-        toast.error(`${file.name}: ${msg}`);
+        if (msg === "cancelled") {
+          toast.info(`Cancelled ${file.name}`);
+        } else {
+          toast.error(`${file.name}: ${msg}`);
+        }
       } finally {
-        setUploads((u) => {
-          const next = { ...u };
-          delete next[tmpKey];
-          return next;
-        });
+        removeUpload(id);
       }
     }
     load();
@@ -185,19 +207,53 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
       </div>
 
       <AnimatePresence>
-        {Object.entries(uploads).map(([key, pct]) => (
-          <motion.div
-            key={key}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="glass p-3 mb-2 flex items-center gap-3"
-          >
-            <Loader2 size={16} className="animate-spin text-primary" />
-            <span className="text-sm flex-1 truncate">{key.split("-")[0]}</span>
-            <span className="text-xs text-muted-foreground">{pct}%</span>
-          </motion.div>
-        ))}
+        {Object.values(uploads).map((u) => {
+          const done = u.pct >= 100;
+          return (
+            <motion.div
+              key={u.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              className="glass p-3 mb-2"
+            >
+              <div className="flex items-center gap-3">
+                <Loader2 size={16} className="animate-spin text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground truncate">
+                    {u.name}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {formatBytes(Math.round((u.size * u.pct) / 100))} of{" "}
+                    {formatBytes(u.size)}
+                    {done && " · finalizing…"}
+                  </div>
+                </div>
+                <span className="text-xs font-medium text-foreground tabular-nums shrink-0 w-10 text-right">
+                  {u.pct}%
+                </span>
+                {u.cancel && !done && (
+                  <button
+                    onClick={u.cancel}
+                    className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    title="Cancel upload"
+                    aria-label={`Cancel upload of ${u.name}`}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <motion.div
+                  className="h-full bg-primary"
+                  initial={false}
+                  animate={{ width: `${u.pct}%` }}
+                  transition={{ ease: "easeOut", duration: 0.2 }}
+                />
+              </div>
+            </motion.div>
+          );
+        })}
       </AnimatePresence>
 
       {loading ? (
