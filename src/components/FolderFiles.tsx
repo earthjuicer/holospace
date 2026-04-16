@@ -883,7 +883,12 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
         </>
       )}
 
-      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+      <FilePreviewModal
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
+        siblings={files as PreviewFile[]}
+        onNavigate={(next) => setPreviewFile(next)}
+      />
 
       <Dialog open={!!renameTarget} onOpenChange={(o) => !o && setRenameTarget(null)}>
         <DialogContent className="sm:max-w-md">
