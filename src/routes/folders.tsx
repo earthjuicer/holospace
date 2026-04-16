@@ -126,6 +126,8 @@ function FoldersPage() {
       return { ...prev, [folderId]: updated };
     });
   };
+
+  const openPreview = (file: LatestFile) => {
     setPreviewFile({
       id: file.id,
       file_name: file.file_name,
