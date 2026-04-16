@@ -93,7 +93,7 @@ function FolderDetailPage() {
             .maybeSingle(),
           supabase
             .from("folder_public_shares")
-            .select("token, expires_at")
+            .select("token, expires_at, allow_upload")
             .eq("folder_id", folderId)
             .maybeSingle(),
         ]);
