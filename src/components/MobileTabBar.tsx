@@ -1,10 +1,11 @@
 import { Link, useLocation } from '@tanstack/react-router';
-import { Home, FileText, Kanban, Calendar, Settings } from 'lucide-react';
+import { Home, Kanban, Calendar, Volume2, Settings } from 'lucide-react';
 
 const TABS = [
   { to: '/' as const, icon: Home, label: 'Home' },
   { to: '/kanban' as const, icon: Kanban, label: 'Tasks' },
   { to: '/calendar' as const, icon: Calendar, label: 'Calendar' },
+  { to: '/voice' as const, icon: Volume2, label: 'Voice' },
   { to: '/settings' as const, icon: Settings, label: 'Settings' },
 ];
 
