@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadResumable } from "@/lib/resumable-upload";
+import { FilePreviewModal, type PreviewFile } from "./FilePreviewModal";
 
 interface InFlightUpload {
   id: string;
@@ -57,6 +58,7 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
   const [files, setFiles] = useState<FolderFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploads, setUploads] = useState<Record<string, InFlightUpload>>({});
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const autoOpenedRef = useRef(false);
 
@@ -310,7 +312,17 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
                 key={f.id}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="glass p-3 flex items-center gap-3 group"
+                onClick={() => setPreviewFile(f)}
+                className="glass p-3 flex items-center gap-3 group cursor-pointer hover:bg-muted/30 transition-colors"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setPreviewFile(f);
+                  }
+                }}
+                aria-label={`Preview ${f.file_name}`}
               >
                 <Icon size={20} className="text-primary shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -323,17 +335,25 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
                   </div>
                 </div>
                 <button
-                  onClick={() => download(f)}
-                  className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    download(f);
+                  }}
+                  className="p-2 rounded-lg hover:bg-primary/10 text-primary"
                   title="Download"
+                  aria-label={`Download ${f.file_name}`}
                 >
                   <Download size={16} />
                 </button>
                 {canDelete && (
                   <button
-                    onClick={() => remove(f)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      remove(f);
+                    }}
                     className="p-2 rounded-lg hover:bg-destructive/10 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Delete"
+                    aria-label={`Delete ${f.file_name}`}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -343,6 +363,8 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
           })}
         </div>
       )}
+
+      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
     </div>
   );
 }
