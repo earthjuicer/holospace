@@ -54,7 +54,7 @@ function formatBytes(bytes: number) {
 export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) {
   const [files, setFiles] = useState<FolderFile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploads, setUploads] = useState<Record<string, number>>({});
+  const [uploads, setUploads] = useState<Record<string, InFlightUpload>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -78,22 +78,36 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folderId, shareToken]);
 
+  const patchUpload = (id: string, patch: Partial<InFlightUpload>) =>
+    setUploads((u) => (u[id] ? { ...u, [id]: { ...u[id], ...patch } } : u));
+
+  const removeUpload = (id: string) =>
+    setUploads((u) => {
+      const next = { ...u };
+      delete next[id];
+      return next;
+    });
+
   const uploadFiles = async (fileList: FileList) => {
     for (const file of Array.from(fileList)) {
-      const tmpKey = `${file.name}-${Date.now()}`;
-      setUploads((u) => ({ ...u, [tmpKey]: 0 }));
+      const id = `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      setUploads((u) => ({
+        ...u,
+        [id]: { id, name: file.name, size: file.size, pct: 0 },
+      }));
       const safeName = file.name.replace(/[^\w.\-]/g, "_");
       const path = `${folderId}/${crypto.randomUUID()}-${safeName}`;
       const RESUMABLE_THRESHOLD = 6 * 1024 * 1024; // 6 MB — standard upload caps around 50MB
 
       try {
         if (file.size > RESUMABLE_THRESHOLD) {
-          // TUS resumable upload — required for files larger than ~50MB.
+          // TUS resumable upload — required for files larger than ~50 MB,
+          // and gives us per-chunk progress + cancellation.
           await uploadResumable({
             file,
             path,
-            onProgress: (pct) =>
-              setUploads((u) => ({ ...u, [tmpKey]: pct })),
+            onProgress: (pct) => patchUpload(id, { pct }),
+            onStart: (cancel) => patchUpload(id, { cancel }),
           });
         } else {
           const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
@@ -101,7 +115,7 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
             upsert: false,
           });
           if (upErr) throw upErr;
-          setUploads((u) => ({ ...u, [tmpKey]: 100 }));
+          patchUpload(id, { pct: 100 });
         }
 
         if (shareToken) {
@@ -129,13 +143,13 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
         toast.success(`Uploaded ${file.name}`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Upload failed";
-        toast.error(`${file.name}: ${msg}`);
+        if (msg === "cancelled") {
+          toast.info(`Cancelled ${file.name}`);
+        } else {
+          toast.error(`${file.name}: ${msg}`);
+        }
       } finally {
-        setUploads((u) => {
-          const next = { ...u };
-          delete next[tmpKey];
-          return next;
-        });
+        removeUpload(id);
       }
     }
     load();
