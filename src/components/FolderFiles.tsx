@@ -207,19 +207,53 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
       </div>
 
       <AnimatePresence>
-        {Object.entries(uploads).map(([key, pct]) => (
-          <motion.div
-            key={key}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="glass p-3 mb-2 flex items-center gap-3"
-          >
-            <Loader2 size={16} className="animate-spin text-primary" />
-            <span className="text-sm flex-1 truncate">{key.split("-")[0]}</span>
-            <span className="text-xs text-muted-foreground">{pct}%</span>
-          </motion.div>
-        ))}
+        {Object.values(uploads).map((u) => {
+          const done = u.pct >= 100;
+          return (
+            <motion.div
+              key={u.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              className="glass p-3 mb-2"
+            >
+              <div className="flex items-center gap-3">
+                <Loader2 size={16} className="animate-spin text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground truncate">
+                    {u.name}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {formatBytes(Math.round((u.size * u.pct) / 100))} of{" "}
+                    {formatBytes(u.size)}
+                    {done && " · finalizing…"}
+                  </div>
+                </div>
+                <span className="text-xs font-medium text-foreground tabular-nums shrink-0 w-10 text-right">
+                  {u.pct}%
+                </span>
+                {u.cancel && !done && (
+                  <button
+                    onClick={u.cancel}
+                    className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    title="Cancel upload"
+                    aria-label={`Cancel upload of ${u.name}`}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <motion.div
+                  className="h-full bg-primary"
+                  initial={false}
+                  animate={{ width: `${u.pct}%` }}
+                  transition={{ ease: "easeOut", duration: 0.2 }}
+                />
+              </div>
+            </motion.div>
+          );
+        })}
       </AnimatePresence>
 
       {loading ? (
