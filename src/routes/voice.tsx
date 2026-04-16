@@ -62,19 +62,23 @@ function VoicePage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Auto-join via invite link
+  // Auto-join via invite link — uses RPC since the channel may not be in the user's visible list yet
   useEffect(() => {
-    if (joinCode && channels.length > 0 && user && !activeChannel) {
-      const target = channels.find((c) => c.invite_code === joinCode);
-      if (target) {
-        joinChannel(target.id);
-        navigate({ to: "/voice", search: {} as any, replace: true });
+    if (!joinCode || !user || activeChannel) return;
+    (async () => {
+      const { data, error } = await supabase.rpc("join_channel_by_invite", {
+        _invite_code: joinCode,
+      });
+      if (error || !data) {
+        toast.error(error?.message ?? "Invalid invite link");
       } else {
-        toast.error("Invalid invite link");
-        navigate({ to: "/voice", search: {} as any, replace: true });
+        await fetchChannels();
+        joinChannel(data as string);
+        toast.success("Joined channel!");
       }
-    }
-  }, [joinCode, channels, user]);
+      navigate({ to: "/voice", search: {} as any, replace: true });
+    })();
+  }, [joinCode, user]);
 
   const fetchChannels = async () => {
     const { data } = await supabase
