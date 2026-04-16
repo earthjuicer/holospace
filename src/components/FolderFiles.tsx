@@ -329,14 +329,9 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
     const isMod = e.metaKey || e.ctrlKey;
     const isShift = e.shiftKey;
 
-    // Plain click with active selection → toggle (Explorer-like). Otherwise open preview.
+    // Plain click always opens the file. Use the checkbox or Cmd/Shift to select.
     if (!isMod && !isShift) {
-      if (selected.size > 0) {
-        e.preventDefault();
-        toggleOne(f.id);
-      } else {
-        setPreviewFile(f);
-      }
+      setPreviewFile(f);
       return;
     }
 
@@ -646,11 +641,9 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            if (hasSelection) toggleOne(f.id);
-                            else setPreviewFile(f);
+                            setPreviewFile(f);
                           }
                         }}
-                        aria-label={`Open ${f.file_name}`}
                         aria-pressed={checked}
                       >
                         <div className="aspect-square rounded-md bg-muted/40 flex items-center justify-center overflow-hidden mb-2">
@@ -776,8 +769,7 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            if (hasSelection) toggleOne(f.id);
-                            else setPreviewFile(f);
+                            setPreviewFile(f);
                           }
                         }}
                         aria-label={`Preview ${f.file_name}`}
