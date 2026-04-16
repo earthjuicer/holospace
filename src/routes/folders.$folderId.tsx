@@ -8,6 +8,9 @@ import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/folders/$folderId")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    upload: search.upload === 1 || search.upload === "1" ? 1 : undefined,
+  }),
   head: () => ({
     meta: [{ title: "Folder — Workspace" }],
   }),
@@ -36,6 +39,7 @@ function formatRemaining(expiresAt: string) {
 
 function FolderDetailPage() {
   const { folderId } = Route.useParams();
+  const { upload } = Route.useSearch();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [folder, setFolder] = useState<Folder | null>(null);
@@ -205,7 +209,7 @@ function FolderDetailPage() {
           </div>
         )}
 
-        <FolderFiles folderId={folderId} canDelete={isOwner} />
+        <FolderFiles folderId={folderId} canDelete={isOwner} autoOpenUpload={upload === 1} />
       </motion.div>
     </div>
   );

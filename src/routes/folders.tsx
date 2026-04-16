@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe,
+  FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -211,16 +211,28 @@ function FoldersPage() {
                     </div>
                   </div>
                 </Link>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  <Link
+                    to="/folders/$folderId"
+                    params={{ folderId: folder.id }}
+                    search={{ upload: 1 }}
+                    className="p-2 rounded-lg hover:bg-primary/10 text-primary"
+                    title="Open & upload files"
+                    aria-label="Open folder and upload files"
+                  >
+                    <Upload size={14} />
+                  </Link>
                   <button
                     onClick={() => setSharingFolderId(sharingFolderId === folder.id ? null : folder.id)}
                     className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
+                    title="Share folder"
                   >
                     <Share2 size={14} />
                   </button>
                   <button
                     onClick={() => deleteFolder(folder.id)}
                     className="p-2 rounded-lg hover:bg-destructive/10 text-destructive"
+                    title="Delete folder"
                   >
                     <Trash2 size={14} />
                   </button>

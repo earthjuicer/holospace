@@ -31,6 +31,8 @@ interface Props {
   shareToken?: string;
   /** owner can delete; share visitors cannot */
   canDelete?: boolean;
+  /** if true, automatically opens the file picker on mount (used by ?upload=1) */
+  autoOpenUpload?: boolean;
 }
 
 const BUCKET = "folder-files";
@@ -51,11 +53,22 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 }
 
-export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) {
+export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenUpload = false }: Props) {
   const [files, setFiles] = useState<FolderFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploads, setUploads] = useState<Record<string, InFlightUpload>>({});
   const inputRef = useRef<HTMLInputElement>(null);
+  const autoOpenedRef = useRef(false);
+
+  // When the page is opened with ?upload=1, pop the OS file picker once.
+  useEffect(() => {
+    if (autoOpenUpload && !autoOpenedRef.current && inputRef.current) {
+      autoOpenedRef.current = true;
+      // Slight delay so the picker opens after the page settles
+      const t = setTimeout(() => inputRef.current?.click(), 250);
+      return () => clearTimeout(t);
+    }
+  }, [autoOpenUpload]);
 
   const load = async () => {
     setLoading(true);
