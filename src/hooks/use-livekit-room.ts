@@ -231,7 +231,25 @@ export function useLiveKitRoom() {
     setScreenShares([]);
     setIsSharing(false);
     setIsMuted(false);
+    setNeedsAudioUnlock(false);
     setConnectionState(ConnectionState.Disconnected);
+  }, []);
+
+  // Call from a click/tap handler when needsAudioUnlock is true.
+  const unlockAudio = useCallback(async () => {
+    const r = roomRef.current;
+    if (r) {
+      try {
+        await r.startAudio();
+      } catch {
+        /* ignore */
+      }
+    }
+    const audios = document.querySelectorAll<HTMLAudioElement>("audio[data-lk-audio]");
+    await Promise.all(
+      Array.from(audios).map((a) => a.play().catch(() => undefined))
+    );
+    setNeedsAudioUnlock(false);
   }, []);
 
   const toggleMute = useCallback(async () => {
