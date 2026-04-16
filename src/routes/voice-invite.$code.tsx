@@ -179,6 +179,8 @@ function VoiceInvitePage() {
       }
       roomRef.current = room;
       refreshParticipants(room);
+      // If the browser already blocked autoplay, surface the unlock prompt.
+      if (!room.canPlaybackAudio) setNeedsAudioUnlock(true);
       playJoinSound();
       setStage("in-room");
     } catch (err: any) {
