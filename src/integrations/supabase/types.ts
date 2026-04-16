@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      channel_categories: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          position?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          position?: number
+        }
+        Relationships: []
+      }
       channel_members: {
         Row: {
           channel_id: string
@@ -223,8 +247,42 @@ export type Database = {
           },
         ]
       }
+      text_messages: {
+        Row: {
+          author_id: string
+          channel_id: string
+          content: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          author_id: string
+          channel_id: string
+          content: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          author_id?: string
+          channel_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "text_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "voice_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       voice_channels: {
         Row: {
+          category_id: string | null
+          channel_type: string
           created_at: string
           created_by: string
           id: string
@@ -232,8 +290,11 @@ export type Database = {
           is_active: boolean
           max_participants: number
           name: string
+          position: number
         }
         Insert: {
+          category_id?: string | null
+          channel_type?: string
           created_at?: string
           created_by: string
           id?: string
@@ -241,8 +302,11 @@ export type Database = {
           is_active?: boolean
           max_participants?: number
           name: string
+          position?: number
         }
         Update: {
+          category_id?: string | null
+          channel_type?: string
           created_at?: string
           created_by?: string
           id?: string
@@ -250,8 +314,17 @@ export type Database = {
           is_active?: boolean
           max_participants?: number
           name?: string
+          position?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "voice_channels_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "channel_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
