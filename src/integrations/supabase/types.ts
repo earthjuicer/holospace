@@ -108,6 +108,7 @@ export type Database = {
           created_at: string
           created_by: string
           id: string
+          invite_code: string
           is_active: boolean
           max_participants: number
           name: string
@@ -116,6 +117,7 @@ export type Database = {
           created_at?: string
           created_by: string
           id?: string
+          invite_code?: string
           is_active?: boolean
           max_participants?: number
           name: string
@@ -124,6 +126,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           id?: string
+          invite_code?: string
           is_active?: boolean
           max_participants?: number
           name?: string
