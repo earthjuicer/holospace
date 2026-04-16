@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe, Upload,
   File as FileIcon, Image as ImageIcon, Video, Music, FileText, Loader2, Download,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFileToFolder } from "@/lib/folder-upload";
