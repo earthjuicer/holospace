@@ -299,6 +299,46 @@ function FolderDetailPage() {
                     <Link2Off size={14} />
                   </button>
                 </div>
+
+                {/* Permission toggle */}
+                <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-muted/30 border border-border/30">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {share!.allow_upload ? (
+                      <Unlock size={14} className="text-primary shrink-0" />
+                    ) : (
+                      <Lock size={14} className="text-muted-foreground shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-foreground">
+                        {share!.allow_upload ? "Allow upload" : "Read-only"}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground truncate">
+                        {share!.allow_upload
+                          ? "Visitors can view, download, and upload files"
+                          : "Visitors can only view and download files"}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={toggleAllowUpload}
+                    role="switch"
+                    aria-checked={share!.allow_upload}
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                      share!.allow_upload ? "bg-primary" : "bg-muted-foreground/40"
+                    }`}
+                    title={
+                      share!.allow_upload
+                        ? "Switch to read-only"
+                        : "Allow visitors to upload"
+                    }
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform ${
+                        share!.allow_upload ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-muted-foreground">Regenerate with:</span>
                   {EXPIRY_OPTIONS.map((opt) => (
