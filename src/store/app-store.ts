@@ -398,8 +398,12 @@ export const useAppStore = create<AppState>()(
  */
 let currentUserScope: string | null = null;
 let unsubscribeSync: (() => void) | null = null;
+let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let lastBackendUpdatedAt: string | null = null;
+// Tracks the most recent push we initiated, so the realtime echo of our own
+// write doesn't trigger a redundant overwrite of local state.
+let lastPushedAt: number = 0;
 
 // Pieces of the store that are user-scoped and should sync to the backend.
 const SYNCED_KEYS = ['documents', 'columns', 'tasks', 'events', 'settings', 'onboardingComplete'] as const;
