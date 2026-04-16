@@ -94,12 +94,12 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
 
   // When the page is opened with ?upload=1, pop the OS file picker once.
   useEffect(() => {
-    if (autoOpenUpload && !autoOpenedRef.current && inputRef.current) {
+    if (canUpload && autoOpenUpload && !autoOpenedRef.current && inputRef.current) {
       autoOpenedRef.current = true;
       const t = setTimeout(() => inputRef.current?.click(), 250);
       return () => clearTimeout(t);
     }
-  }, [autoOpenUpload]);
+  }, [autoOpenUpload, canUpload]);
 
   const load = async () => {
     setLoading(true);
