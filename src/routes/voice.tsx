@@ -7,7 +7,9 @@ import {
   Mic, MicOff, Headphones, PhoneOff, Plus, Users, Volume2, Hash, Link2, Copy, Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import { playJoinSound, playLeaveSound } from "@/lib/voice-sounds";
+import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
+import { useScreenShare } from "@/hooks/use-screen-share";
+import { ScreenShareControls } from "@/components/ScreenShareControls";
 
 export const Route = createFileRoute("/voice")({
   validateSearch: (search: Record<string, unknown>) => ({
