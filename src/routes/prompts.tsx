@@ -479,12 +479,12 @@ function PromptsPage() {
       </div>
 
       {/* Detail */}
-      <div className={`${showDetail ? 'flex' : 'hidden md:flex'} flex-1 overflow-y-auto flex-col`}>
+      <div className={`${showDetail ? 'block' : 'hidden md:block'} flex-1 overflow-y-auto`}>
         {/* Mobile back button */}
         {showDetail && (
           <button
             onClick={() => { setSelected(null); setEditing(null); }}
-            className="md:hidden flex items-center gap-1.5 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground border-b border-border/30 shrink-0"
+            className="md:hidden sticky top-0 z-10 w-full flex items-center gap-1.5 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground border-b border-border/30 bg-background/80 backdrop-blur"
           >
             ← Back to prompts
           </button>
