@@ -80,7 +80,6 @@ export type Database = {
           created_at: string
           icon: string
           id: string
-          is_private: boolean
           name: string
           owner_id: string
           updated_at: string
@@ -89,7 +88,6 @@ export type Database = {
           created_at?: string
           icon?: string
           id?: string
-          is_private?: boolean
           name: string
           owner_id: string
           updated_at?: string
@@ -98,7 +96,6 @@ export type Database = {
           created_at?: string
           icon?: string
           id?: string
-          is_private?: boolean
           name?: string
           owner_id?: string
           updated_at?: string
@@ -186,7 +183,6 @@ export type Database = {
           description: string | null
           folder_id: string | null
           id: string
-          is_private: boolean
           model: string
           owner_id: string
           tags: string[]
@@ -199,7 +195,6 @@ export type Database = {
           description?: string | null
           folder_id?: string | null
           id?: string
-          is_private?: boolean
           model?: string
           owner_id: string
           tags?: string[]
@@ -212,7 +207,6 @@ export type Database = {
           description?: string | null
           folder_id?: string | null
           id?: string
-          is_private?: boolean
           model?: string
           owner_id?: string
           tags?: string[]
@@ -264,6 +258,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_channel_invite_code: {
+        Args: { _channel_id: string }
+        Returns: string
+      }
       is_channel_member: {
         Args: { _channel_id: string; _user_id: string }
         Returns: boolean
