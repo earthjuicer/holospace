@@ -205,6 +205,8 @@ export function useLiveKitRoom() {
       await roomRef.current.disconnect();
       roomRef.current = null;
     }
+    // Remove any audio elements we attached
+    document.querySelectorAll("audio[data-lk-audio]").forEach((el) => el.remove());
     setRoom(null);
     setParticipants([]);
     setScreenShares([]);
