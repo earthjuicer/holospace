@@ -168,64 +168,59 @@ function FoldersPage() {
 
     if (data.length === 0) {
       setFileCounts({});
-      setLatestFiles({});
+      setFolderFiles({});
       return;
     }
 
     const folderIds = data.map((folder) => folder.id);
 
-    // Counts (cheap, used for the "N items" label)
+    // Fetch ALL files in one query (sorted newest first).
+    // We use this for both the count and the chip's prev/next navigation.
     const { data: fileRows } = await supabase
       .from("folder_files")
-      .select("folder_id")
-      .in("folder_id", folderIds);
+      .select("id, folder_id, file_name, mime_type, storage_path, size_bytes, created_at")
+      .in("folder_id", folderIds)
+      .order("created_at", { ascending: false });
 
     const counts = folderIds.reduce<Record<string, number>>((acc, id) => {
       acc[id] = 0;
       return acc;
     }, {});
 
-    fileRows?.forEach((file) => {
-      counts[file.folder_id] = (counts[file.folder_id] ?? 0) + 1;
-    });
-
-    setFileCounts(counts);
-
-    // Latest file per folder for the preview chip on each card.
-    const { data: latestRows } = await supabase
-      .from("folder_files")
-      .select("id, folder_id, file_name, mime_type, storage_path, size_bytes, created_at")
-      .in("folder_id", folderIds)
-      .order("created_at", { ascending: false });
-
-    const seen: Record<string, LatestFile> = {};
-    latestRows?.forEach((row) => {
-      if (seen[row.folder_id]) return;
-      seen[row.folder_id] = {
+    const grouped: Record<string, LatestFile[]> = {};
+    fileRows?.forEach((row) => {
+      counts[row.folder_id] = (counts[row.folder_id] ?? 0) + 1;
+      if (!grouped[row.folder_id]) grouped[row.folder_id] = [];
+      grouped[row.folder_id].push({
         id: row.id,
         file_name: row.file_name,
         mime_type: row.mime_type,
         storage_path: row.storage_path,
         size_bytes: row.size_bytes ?? 0,
-      };
+      });
     });
 
-    // Sign image previews so we can show a real thumbnail (10 min URL).
-    const imageEntries = Object.entries(seen).filter(([, f]) =>
-      f.mime_type?.startsWith("image/")
+    setFileCounts(counts);
+
+    // Sign image thumbnails for the FIRST (latest) file of each folder
+    // so the initial chip view shows a real image preview without delay.
+    // Other indexes get signed lazily on navigation.
+    const firstImageEntries = Object.entries(grouped).filter(
+      ([, files]) => files[0]?.mime_type?.startsWith("image/")
     );
     await Promise.all(
-      imageEntries.map(async ([folderId, file]) => {
+      firstImageEntries.map(async ([folderId, files]) => {
+        const first = files[0];
         const { data: signed } = await supabase.storage
           .from("folder-files")
-          .createSignedUrl(file.storage_path, 600);
+          .createSignedUrl(first.storage_path, 600);
         if (signed?.signedUrl) {
-          seen[folderId] = { ...file, thumbUrl: signed.signedUrl };
+          grouped[folderId] = [{ ...first, thumbUrl: signed.signedUrl }, ...files.slice(1)];
         }
       })
     );
 
-    setLatestFiles(seen);
+    setFolderFiles(grouped);
   };
 
   const fetchShares = async () => {
