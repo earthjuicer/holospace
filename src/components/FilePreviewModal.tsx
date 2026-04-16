@@ -75,6 +75,8 @@ export function FilePreviewModal({ file, onClose }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [file, onClose]);
 
+  const [copied, setCopied] = useState(false);
+
   const download = async () => {
     if (!file || !url) return;
     const a = document.createElement("a");
@@ -83,6 +85,39 @@ export function FilePreviewModal({ file, onClose }: Props) {
     document.body.appendChild(a);
     a.click();
     a.remove();
+  };
+
+  const shareLink = async (expiresInSec: number, label: string) => {
+    if (!file) return;
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(file.storage_path, expiresInSec);
+    if (error || !data) {
+      toast.error("Failed to create share link");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(data.signedUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+      toast.success(`Link copied · expires in ${label}`);
+    } catch {
+      toast.error("Could not copy link");
+    }
+  };
+
+  const nativeShare = async () => {
+    if (!file || !url) return;
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    if (typeof nav.share === "function") {
+      try {
+        await nav.share({ title: file.file_name, url });
+      } catch {
+        // user cancelled — no toast
+      }
+    } else {
+      shareLink(60 * 60 * 24, "24 hours");
+    }
   };
 
   const mime = file?.mime_type ?? "";
