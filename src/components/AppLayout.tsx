@@ -1,6 +1,6 @@
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
-import { useAppStore } from '@/store/app-store';
+import { useAppStore, setUserScope } from '@/store/app-store';
 import { useAuth } from '@/hooks/use-auth';
 import { AppSidebar } from './AppSidebar';
 import { MobileTabBar } from './MobileTabBar';
