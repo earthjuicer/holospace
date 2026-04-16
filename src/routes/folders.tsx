@@ -74,11 +74,46 @@ function FoldersPage() {
   const [sharingFolderId, setSharingFolderId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
-      fetchFolders();
-      fetchShares();
-    }
-  }, [user]);
+    if (!user) return;
+    fetchFolders();
+    fetchShares();
+
+    // Auto-refresh: re-fetch whenever folders, shares, or files change anywhere
+    // in the workspace. Coalesce bursts so rapid edits trigger one fetch.
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const schedule = (fn: () => void) => {
+      if (t) clearTimeout(t);
+      t = setTimeout(fn, 200);
+    };
+
+    const sub = supabase
+      .channel(`folders-page-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "folders" },
+        () => schedule(fetchFolders)
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "folder_files" },
+        () => schedule(fetchFolders)
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "folder_shares" },
+        () => {
+          schedule(fetchFolders);
+          schedule(fetchShares);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (t) clearTimeout(t);
+      supabase.removeChannel(sub);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const fetchFolders = async () => {
     const { data } = await supabase
