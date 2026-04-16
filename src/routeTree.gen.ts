@@ -20,6 +20,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FoldersRouteImport } from './routes/folders'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VoiceInviteCodeRouteImport } from './routes/voice-invite.$code'
 import { Route as TextChannelIdRouteImport } from './routes/text.$channelId'
 import { Route as ShareTokenRouteImport } from './routes/share.$token'
 import { Route as FoldersFolderIdRouteImport } from './routes/folders.$folderId'
@@ -80,6 +81,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VoiceInviteCodeRoute = VoiceInviteCodeRouteImport.update({
+  id: '/voice-invite/$code',
+  path: '/voice-invite/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TextChannelIdRoute = TextChannelIdRouteImport.update({
   id: '/text/$channelId',
   path: '/text/$channelId',
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/share/$token': typeof ShareTokenRoute
   '/text/$channelId': typeof TextChannelIdRoute
+  '/voice-invite/$code': typeof VoiceInviteCodeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -134,6 +141,7 @@ export interface FileRoutesByTo {
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/share/$token': typeof ShareTokenRoute
   '/text/$channelId': typeof TextChannelIdRoute
+  '/voice-invite/$code': typeof VoiceInviteCodeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/share/$token': typeof ShareTokenRoute
   '/text/$channelId': typeof TextChannelIdRoute
+  '/voice-invite/$code': typeof VoiceInviteCodeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/folders/$folderId'
     | '/share/$token'
     | '/text/$channelId'
+    | '/voice-invite/$code'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/folders/$folderId'
     | '/share/$token'
     | '/text/$channelId'
+    | '/voice-invite/$code'
   id:
     | '__root__'
     | '/'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/folders/$folderId'
     | '/share/$token'
     | '/text/$channelId'
+    | '/voice-invite/$code'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -222,6 +234,7 @@ export interface RootRouteChildren {
   EditorDocIdRoute: typeof EditorDocIdRoute
   ShareTokenRoute: typeof ShareTokenRoute
   TextChannelIdRoute: typeof TextChannelIdRoute
+  VoiceInviteCodeRoute: typeof VoiceInviteCodeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -303,6 +316,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/voice-invite/$code': {
+      id: '/voice-invite/$code'
+      path: '/voice-invite/$code'
+      fullPath: '/voice-invite/$code'
+      preLoaderRoute: typeof VoiceInviteCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/text/$channelId': {
       id: '/text/$channelId'
       path: '/text/$channelId'
@@ -360,7 +380,17 @@ const rootRouteChildren: RootRouteChildren = {
   EditorDocIdRoute: EditorDocIdRoute,
   ShareTokenRoute: ShareTokenRoute,
   TextChannelIdRoute: TextChannelIdRoute,
+  VoiceInviteCodeRoute: VoiceInviteCodeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
