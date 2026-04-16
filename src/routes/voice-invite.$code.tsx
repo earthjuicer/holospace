@@ -7,6 +7,8 @@ import {
   Track,
   ConnectionState,
   type Participant,
+  type RemoteTrack,
+  type RemoteAudioTrack,
 } from "livekit-client";
 import { Mic, MicOff, Headphones, PhoneOff, Users, Volume2, LogIn } from "lucide-react";
 import { toast, Toaster } from "sonner";
