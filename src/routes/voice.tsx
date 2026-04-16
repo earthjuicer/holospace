@@ -302,7 +302,7 @@ function VoicePage() {
                     In voice — {lk.participants.length}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {lk.participants.map((p) => {
+                    {lk.participants.map((p: VoiceParticipantInfo) => {
                       const vol = volumes[p.identity] ?? 100;
                       const card = (
                         <div
