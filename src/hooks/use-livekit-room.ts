@@ -41,6 +41,10 @@ export function useLiveKitRoom() {
   const [screenShares, setScreenShares] = useState<ScreenShareTrackInfo[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  // Continuous audio levels (0..1) per participant identity. Polled at ~10Hz
+  // from LiveKit's Participant.audioLevel so the UI can render a live mic
+  // meter for every speaker — useful for "who is actually transmitting?".
+  const [audioLevels, setAudioLevels] = useState<Record<string, number>>({});
   // Mobile browsers (especially iOS Safari) often block autoplay until the
   // user taps after the track is attached. UI can show a "Tap to enable audio"
   // prompt + call unlockAudio() from a click handler.
@@ -281,6 +285,7 @@ export function useLiveKitRoom() {
     setRoom(null);
     setParticipants([]);
     setScreenShares([]);
+    setAudioLevels({});
     setIsSharing(false);
     setIsMuted(false);
     setNeedsAudioUnlock(false);
@@ -378,6 +383,24 @@ export function useLiveKitRoom() {
     []
   );
 
+  // Poll Participant.audioLevel at ~10Hz so the UI can render a live mic
+  // meter beside every participant. Cheaper than wiring AudioContext analyzers
+  // and accurate enough to answer "is this person actually transmitting?".
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected) return;
+    const id = setInterval(() => {
+      const r = roomRef.current;
+      if (!r) return;
+      const next: Record<string, number> = {};
+      next[r.localParticipant.identity] = r.localParticipant.audioLevel ?? 0;
+      r.remoteParticipants.forEach((p) => {
+        next[p.identity] = p.audioLevel ?? 0;
+      });
+      setAudioLevels(next);
+    }, 100);
+    return () => clearInterval(id);
+  }, [connectionState]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -394,6 +417,7 @@ export function useLiveKitRoom() {
     isConnected: connectionState === ConnectionState.Connected,
     participants,
     screenShares,
+    audioLevels,
     isMuted,
     isSharing,
     needsAudioUnlock,
