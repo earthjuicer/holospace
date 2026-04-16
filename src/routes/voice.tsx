@@ -7,6 +7,7 @@ import {
   Mic, MicOff, Headphones, PhoneOff, Plus, Users, Volume2, Hash, Link2, Copy, Check,
 } from "lucide-react";
 import { toast } from "sonner";
+import { playJoinSound, playLeaveSound } from "@/lib/voice-sounds";
 
 export const Route = createFileRoute("/voice")({
   validateSearch: (search: Record<string, unknown>) => ({
