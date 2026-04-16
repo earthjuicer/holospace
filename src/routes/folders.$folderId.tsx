@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { FolderFiles } from "@/components/FolderFiles";
-import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2 } from "lucide-react";
+import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, LinkOff } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/folders/$folderId")({
