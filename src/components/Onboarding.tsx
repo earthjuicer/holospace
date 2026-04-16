@@ -25,9 +25,13 @@ const STEPS = [
 ];
 
 export function Onboarding() {
-  const { onboardingComplete, completeOnboarding, updateSettings } = useAppStore();
+  const { onboardingComplete, completeOnboarding, updateSettings, settings } = useAppStore();
   const [step, setStep] = useState(0);
-  const [name, setName] = useState('');
+  // Prefill from auto-detected display_name / email prefix so users can just
+  // hit Continue or tweak it.
+  const initialName =
+    settings.userName && settings.userName !== 'User' ? settings.userName : '';
+  const [name, setName] = useState(initialName);
 
   if (onboardingComplete) return null;
 
