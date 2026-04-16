@@ -420,7 +420,10 @@ async function pushToBackend(userId: string) {
   const snapshot = takeSnapshot(useAppStore.getState());
   const { data, error } = await supabase
     .from('user_workspace')
-    .upsert({ user_id: userId, data: snapshot as unknown as Record<string, unknown> }, { onConflict: 'user_id' })
+    .upsert(
+      [{ user_id: userId, data: snapshot as unknown as Record<string, unknown> }],
+      { onConflict: 'user_id' }
+    )
     .select('updated_at')
     .maybeSingle();
   if (!error && data?.updated_at) {
