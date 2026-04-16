@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronDown, ChevronRight, Plus, Volume2, Hash, Trash2, FolderPlus,
+  ChevronDown, ChevronRight, Plus, Volume2, Hash, Trash2, FolderPlus, Bell,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ringChannel } from "@/lib/ring-actions";
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
@@ -178,6 +179,11 @@ export function ChannelSidebar({ activeVoiceId, activeTextId, onJoinVoice }: Pro
           </button>
         </ContextMenuTrigger>
         <ContextMenuContent>
+          {ch.channel_type === "voice" && (
+            <ContextMenuItem onClick={() => ringChannel(ch.id)}>
+              <Bell size={14} className="mr-2" /> Ring everyone in {ch.name}
+            </ContextMenuItem>
+          )}
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => setConfirmDelete({ kind: "channel", id: ch.id, name: ch.name })}
