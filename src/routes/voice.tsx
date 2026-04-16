@@ -33,7 +33,9 @@ function VoicePage() {
   const [activeChannel, setActiveChannel] = useState<SidebarChannel | null>(null);
   const [copied, setCopied] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
+  const [pttActive, setPttActive] = useState(false);
   const lastChannelRef = useRef<string | null>(null);
+  const pttHoldingRef = useRef(false);
 
   const lk = useLiveKitRoom();
 
@@ -67,6 +69,48 @@ function VoicePage() {
       (el as HTMLAudioElement).muted = isDeafened;
     });
   }, [isDeafened, lk.participants.length]);
+
+  // Push-to-talk: hold spacebar to talk while muted
+  useEffect(() => {
+    if (!lk.isConnected || !lk.room) return;
+
+    const isTypingTarget = (el: EventTarget | null) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        el.isContentEditable
+      );
+    };
+
+    const onDown = async (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      if (isTypingTarget(e.target)) return;
+      if (!lk.isMuted) return; // PTT only matters when muted
+      e.preventDefault();
+      if (pttHoldingRef.current) return;
+      pttHoldingRef.current = true;
+      setPttActive(true);
+      await lk.room?.localParticipant.setMicrophoneEnabled(true);
+    };
+
+    const onUp = async (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      if (!pttHoldingRef.current) return;
+      e.preventDefault();
+      pttHoldingRef.current = false;
+      setPttActive(false);
+      await lk.room?.localParticipant.setMicrophoneEnabled(false);
+    };
+
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+    };
+  }, [lk.isConnected, lk.isMuted, lk.room]);
 
   const joinChannel = async (channel: SidebarChannel) => {
     if (!user) return;
@@ -231,14 +275,16 @@ function VoicePage() {
                 />
                 <button
                   onClick={handleToggleMute}
-                  className={`p-2.5 rounded-xl transition-all ${
-                    lk.isMuted
+                  className={`p-2.5 rounded-xl transition-all relative ${
+                    pttActive
+                      ? "bg-primary/20 text-primary ring-2 ring-primary"
+                      : lk.isMuted
                       ? "bg-destructive/20 text-destructive"
                       : "bg-muted/50 text-foreground hover:bg-muted"
                   }`}
-                  title={lk.isMuted ? "Unmute" : "Mute"}
+                  title={lk.isMuted ? "Unmute (or hold Space to talk)" : "Mute"}
                 >
-                  {lk.isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+                  {pttActive || !lk.isMuted ? <Mic size={18} /> : <MicOff size={18} />}
                 </button>
                 <button
                   onClick={() => setIsDeafened(!isDeafened)}
