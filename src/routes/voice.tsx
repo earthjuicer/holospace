@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Mic, MicOff, Headphones, PhoneOff, Users, Volume2, Copy, Check,
-  RefreshCw, Clock, UserX, Ban, Link2,
+  RefreshCw, Clock, UserX, Ban, Link2, Volume1,
 } from "lucide-react";
 import { toast } from "sonner";
 import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
@@ -20,6 +20,8 @@ import {
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
 
 export const Route = createFileRoute("/voice")({
   validateSearch: (search: Record<string, unknown>) => ({
