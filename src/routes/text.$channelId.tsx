@@ -47,6 +47,7 @@ interface AuthorProfile {
 function TextChannelPage() {
   const { channelId } = Route.useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [channel, setChannel] = useState<ChannelInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [authors, setAuthors] = useState<Record<string, AuthorProfile>>({});
