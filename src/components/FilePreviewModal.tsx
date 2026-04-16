@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ZoomIn, ZoomOut, RotateCcw, Download, Loader2 } from "lucide-react";
+import { X, ZoomIn, ZoomOut, RotateCcw, Download, Loader2, Share2, Copy, Check } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -67,6 +75,8 @@ export function FilePreviewModal({ file, onClose }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [file, onClose]);
 
+  const [copied, setCopied] = useState(false);
+
   const download = async () => {
     if (!file || !url) return;
     const a = document.createElement("a");
@@ -75,6 +85,39 @@ export function FilePreviewModal({ file, onClose }: Props) {
     document.body.appendChild(a);
     a.click();
     a.remove();
+  };
+
+  const shareLink = async (expiresInSec: number, label: string) => {
+    if (!file) return;
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(file.storage_path, expiresInSec);
+    if (error || !data) {
+      toast.error("Failed to create share link");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(data.signedUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+      toast.success(`Link copied · expires in ${label}`);
+    } catch {
+      toast.error("Could not copy link");
+    }
+  };
+
+  const nativeShare = async () => {
+    if (!file || !url) return;
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    if (typeof nav.share === "function") {
+      try {
+        await nav.share({ title: file.file_name, url });
+      } catch {
+        // user cancelled — no toast
+      }
+    } else {
+      shareLink(60 * 60 * 24, "24 hours");
+    }
   };
 
   const mime = file?.mime_type ?? "";
@@ -140,6 +183,37 @@ export function FilePreviewModal({ file, onClose }: Props) {
                   <div className="w-px h-6 bg-border/60 mx-1" />
                 </>
               )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="p-2 rounded-lg hover:bg-muted/60 text-foreground"
+                    title="Share"
+                    aria-label="Share file"
+                  >
+                    {copied ? <Check size={16} className="text-primary" /> : <Share2 size={16} />}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuLabel>Share this file</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={nativeShare}>
+                    <Share2 size={14} className="mr-2" /> Share via…
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
+                    Copy link · expires in
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => shareLink(60 * 60, "1 hour")}>
+                    <Copy size={14} className="mr-2" /> 1 hour
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => shareLink(60 * 60 * 24, "24 hours")}>
+                    <Copy size={14} className="mr-2" /> 24 hours
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => shareLink(60 * 60 * 24 * 7, "7 days")}>
+                    <Copy size={14} className="mr-2" /> 7 days
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <button
                 onClick={download}
                 className="p-2 rounded-lg hover:bg-primary/10 text-primary"
