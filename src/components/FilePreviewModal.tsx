@@ -169,6 +169,23 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
     else goPrev();
   };
 
+  // Mouse wheel / trackpad scroll navigates between files.
+  // Throttled so a single flick doesn't skip multiple files. Ignored while
+  // zoomed (so the wheel still scrolls inside a zoomed image/PDF).
+  const wheelLock = useRef(0);
+  const onWheel = (e: React.WheelEvent) => {
+    if (zoom !== 1) return;
+    if (!prev && !next) return;
+    const now = Date.now();
+    if (now - wheelLock.current < 350) return;
+    // Use whichever axis is dominant — supports vertical wheels + horizontal trackpads.
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (Math.abs(delta) < 20) return;
+    wheelLock.current = now;
+    if (delta > 0) goNext();
+    else goPrev();
+  };
+
   // Close on Escape, zoom on +/-, navigate with arrow keys.
   useEffect(() => {
     if (!file) return;
