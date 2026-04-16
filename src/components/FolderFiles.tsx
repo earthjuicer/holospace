@@ -769,8 +769,7 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            if (hasSelection) toggleOne(f.id);
-                            else setPreviewFile(f);
+                            setPreviewFile(f);
                           }
                         }}
                         aria-label={`Preview ${f.file_name}`}
