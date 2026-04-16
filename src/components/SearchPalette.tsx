@@ -20,8 +20,13 @@ export function SearchPalette() {
       }
       if (e.key === 'Escape') setOpen(false);
     };
+    const handleOpen = () => setOpen(true);
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    window.addEventListener('open-search', handleOpen);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      window.removeEventListener('open-search', handleOpen);
+    };
   }, []);
 
   useEffect(() => {

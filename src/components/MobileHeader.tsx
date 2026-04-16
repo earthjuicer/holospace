@@ -31,7 +31,7 @@ export function MobileHeader() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { addDocument, settings, updateSettings, setSearchOpen } = useAppStore();
+  const { addDocument, settings, updateSettings } = useAppStore();
   const { user, signOut } = useAuth();
 
   const title = TITLES[location.pathname] ?? 'Workspace';
@@ -122,7 +122,7 @@ export function MobileHeader() {
       </div>
 
       <button
-        onClick={() => setSearchOpen(true)}
+        onClick={() => window.dispatchEvent(new Event('open-search'))}
         className="p-2 rounded-xl hover:bg-muted/50 text-foreground"
         aria-label="Search"
       >
