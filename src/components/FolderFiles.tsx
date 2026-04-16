@@ -488,30 +488,37 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
 
   return (
     <div>
-      <div
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
-        }}
-        className="glass border-2 border-dashed border-border/40 p-6 text-center mb-4 cursor-pointer hover:border-primary/40 transition-colors"
-        onClick={() => inputRef.current?.click()}
-      >
-        <Upload size={28} className="mx-auto mb-2 text-muted-foreground" />
-        <p className="text-sm text-foreground font-medium">
-          Drop files or click to upload
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Images, videos, recordings, anything up to 5 GB
-        </p>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => e.target.files && uploadFiles(e.target.files)}
-        />
-      </div>
+      {canUpload ? (
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+          }}
+          className="glass border-2 border-dashed border-border/40 p-6 text-center mb-4 cursor-pointer hover:border-primary/40 transition-colors"
+          onClick={() => inputRef.current?.click()}
+        >
+          <Upload size={28} className="mx-auto mb-2 text-muted-foreground" />
+          <p className="text-sm text-foreground font-medium">
+            Drop files or click to upload
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Images, videos, recordings, anything up to 5 GB
+          </p>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => e.target.files && uploadFiles(e.target.files)}
+          />
+        </div>
+      ) : (
+        <div className="glass border border-border/40 px-4 py-3 mb-4 flex items-center gap-2.5 text-sm text-muted-foreground">
+          <Lock size={14} className="text-primary shrink-0" />
+          <span>This is a read-only share — uploads are disabled by the owner.</span>
+        </div>
+      )}
 
       <AnimatePresence>
         {Object.values(uploads).map((u) => {
