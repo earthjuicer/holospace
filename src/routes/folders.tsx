@@ -427,7 +427,7 @@ function FoldersPage() {
                   e.preventDefault();
                   handleDropFiles(folder.id, e.dataTransfer.files);
                 }}
-                className={`glass p-4 group relative transition-all ${
+                className={`glass p-4 group relative transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30 ${
                   isDraggingOver
                     ? "ring-2 ring-primary/60 border-primary/40 bg-primary/5"
                     : ""
