@@ -28,6 +28,7 @@ export interface VoiceParticipantInfo {
   isMuted: boolean;
   isSpeaking: boolean;
   isScreenSharing: boolean;
+  isGuest: boolean;
 }
 
 export function useLiveKitRoom() {
@@ -53,6 +54,7 @@ export function useLiveKitRoom() {
         isMuted: micPub ? micPub.isMuted : true,
         isSpeaking: p.isSpeaking,
         isScreenSharing: !!screenPub && !screenPub.isMuted,
+        isGuest: p.identity.startsWith("guest-"),
       });
     };
     collect(r.localParticipant, true);
