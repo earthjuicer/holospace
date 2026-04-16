@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadResumable } from "@/lib/resumable-upload";
+import { FilePreviewModal, type PreviewFile } from "./FilePreviewModal";
 
 interface InFlightUpload {
   id: string;
