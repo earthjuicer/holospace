@@ -10,7 +10,7 @@ import {
   type RemoteTrack,
   type RemoteAudioTrack,
 } from "livekit-client";
-import { Mic, MicOff, Headphones, PhoneOff, Users, Volume2, LogIn } from "lucide-react";
+import { Mic, MicOff, Headphones, PhoneOff, Users, Volume2, LogIn, Sparkles } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { getLiveKitTokenForGuest } from "@/utils/livekit-guest.functions";
 import {
@@ -195,9 +195,20 @@ function VoiceInvitePage() {
                 <Volume2 size={26} className="text-primary" />
               </div>
               <h1 className="text-xl font-bold text-foreground mb-1">Join voice channel</h1>
-              <p className="text-sm text-muted-foreground mb-6">
+              <p className="text-sm text-muted-foreground mb-4">
                 You've been invited as a guest. Pick a name to join.
               </p>
+              <div className="mb-4 rounded-lg border border-border/40 bg-muted/40 px-3 py-2.5 text-left">
+                <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                  <Sparkles size={14} className="mt-0.5 shrink-0 text-primary" />
+                  <div>
+                    <p className="text-foreground/90">You are joining as a guest — your name won't be saved.</p>
+                    <Link to="/signup" className="mt-1 inline-flex items-center gap-1 text-primary hover:underline">
+                      <LogIn size={12} /> Sign up to keep history
+                    </Link>
+                  </div>
+                </div>
+              </div>
               <input
                 autoFocus
                 value={name}

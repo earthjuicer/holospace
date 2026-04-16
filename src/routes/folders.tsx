@@ -33,10 +33,17 @@ interface FolderShare {
   role: string;
 }
 
+function formatItemCount(count: number) {
+  if (count === 0) return "No items yet";
+  if (count === 1) return "1 item";
+  return `${count} items`;
+}
+
 function FoldersPage() {
   const { user } = useAuth();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [shares, setShares] = useState<FolderShare[]>([]);
+  const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
   const [newFolderName, setNewFolderName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
@@ -54,7 +61,32 @@ function FoldersPage() {
       .from("folders")
       .select("*")
       .order("created_at", { ascending: false });
-    if (data) setFolders(data);
+
+    if (!data) return;
+
+    setFolders(data);
+
+    if (data.length === 0) {
+      setFileCounts({});
+      return;
+    }
+
+    const folderIds = data.map((folder) => folder.id);
+    const { data: fileRows } = await supabase
+      .from("folder_files")
+      .select("folder_id")
+      .in("folder_id", folderIds);
+
+    const counts = folderIds.reduce<Record<string, number>>((acc, id) => {
+      acc[id] = 0;
+      return acc;
+    }, {});
+
+    fileRows?.forEach((file) => {
+      counts[file.folder_id] = (counts[file.folder_id] ?? 0) + 1;
+    });
+
+    setFileCounts(counts);
   };
 
   const fetchShares = async () => {
@@ -189,7 +221,7 @@ function FoldersPage() {
               transition={{ delay: i * 0.04 }}
               className="glass p-4 group"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-3">
                 <Link
                   to="/folders/$folderId"
                   params={{ folderId: folder.id }}
@@ -199,6 +231,8 @@ function FoldersPage() {
                   <div className="min-w-0">
                     <div className="font-medium text-foreground truncate">{folder.name}</div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <span>{formatItemCount(fileCounts[folder.id] ?? 0)}</span>
+                      <span>•</span>
                       {folder.owner_id === user?.id ? (
                         <>
                           <Globe size={10} /> Owner
@@ -211,16 +245,17 @@ function FoldersPage() {
                     </div>
                   </div>
                 </Link>
-                <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 shrink-0 opacity-100">
                   <Link
                     to="/folders/$folderId"
                     params={{ folderId: folder.id }}
                     search={{ upload: 1 }}
-                    className="p-2 rounded-lg hover:bg-primary/10 text-primary"
+                    className="inline-flex items-center gap-1 rounded-lg border border-border/40 bg-muted/40 px-2.5 py-2 text-xs font-medium text-primary hover:bg-primary/10"
                     title="Open & upload files"
                     aria-label="Open folder and upload files"
                   >
                     <Upload size={14} />
+                    <span className="hidden sm:inline">Upload</span>
                   </Link>
                   <button
                     onClick={() => setSharingFolderId(sharingFolderId === folder.id ? null : folder.id)}
@@ -299,7 +334,7 @@ function FoldersPage() {
                     <div>
                       <div className="font-medium text-foreground">{folder.name}</div>
                       <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Share2 size={10} /> Shared with you
+                        <Share2 size={10} /> Shared with you • {formatItemCount(fileCounts[folder.id] ?? 0)}
                       </div>
                     </div>
                   </Link>
