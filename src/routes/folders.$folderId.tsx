@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { FolderFiles } from "@/components/FolderFiles";
-import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, LinkOff } from "lucide-react";
+import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, Link2Off } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/folders/$folderId")({
@@ -108,6 +108,23 @@ function FolderDetailPage() {
     }
     setShare({ token: data[0].token, expires_at: data[0].expires_at });
     toast.success("New share link generated");
+  };
+
+  // Revoke the public share immediately by deleting the row. The /share/:token
+  // page will return "not found" the moment this completes, so anyone holding
+  // the old link can no longer view, download, or upload to this folder.
+  const stopSharing = async () => {
+    if (!confirm("Stop sharing this folder? The current link will stop working immediately.")) return;
+    const { error } = await supabase
+      .from("folder_public_shares")
+      .delete()
+      .eq("folder_id", folderId);
+    if (error) {
+      toast.error(error.message || "Failed to stop sharing");
+      return;
+    }
+    setShare(null);
+    toast.success("Sharing stopped");
   };
 
   const copy = async () => {
@@ -217,6 +234,14 @@ function FolderDetailPage() {
                   title="Regenerate"
                 >
                   <RefreshCw size={14} />
+                </button>
+                <button
+                  onClick={stopSharing}
+                  className="p-2 rounded-lg hover:bg-destructive/10 text-destructive"
+                  title="Stop sharing"
+                  aria-label="Stop sharing folder"
+                >
+                  <Link2Off size={14} />
                 </button>
               </div>
             ) : (
