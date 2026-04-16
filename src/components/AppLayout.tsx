@@ -4,6 +4,7 @@ import { useAppStore } from '@/store/app-store';
 import { useAuth } from '@/hooks/use-auth';
 import { AppSidebar } from './AppSidebar';
 import { MobileTabBar } from './MobileTabBar';
+import { MobileHeader } from './MobileHeader';
 import { SearchPalette } from './SearchPalette';
 import { Onboarding } from './Onboarding';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -13,7 +14,7 @@ const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
-  const { settings, sidebarOpen } = useAppStore();
+  const { settings } = useAppStore();
   const { user, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -74,12 +75,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <>
       <div className="flex h-[100dvh] w-full overflow-hidden">
         {!isMobile && <AppSidebar />}
-        <main
-          className="flex-1 overflow-y-auto overflow-x-hidden transition-all duration-220"
-        >
-          {children}
-        </main>
-        {isMobile && <MobileTabBar />}
+        <div className="flex-1 flex flex-col min-w-0">
+          {isMobile && <MobileHeader />}
+          <main className="flex-1 overflow-y-auto overflow-x-hidden transition-all duration-220">
+            {children}
+            {/* Spacer so content doesn't hide behind fixed mobile tab bar */}
+            {isMobile && <div className="h-16 shrink-0" aria-hidden="true" />}
+          </main>
+          {isMobile && <MobileTabBar />}
+        </div>
       </div>
       <SearchPalette />
       <Onboarding />

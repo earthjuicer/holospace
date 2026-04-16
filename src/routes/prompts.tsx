@@ -379,10 +379,12 @@ function PromptsPage() {
 
   const variables = selected ? extractVariables(selected.content) : [];
 
+  const showDetail = !!(selected || editing);
+
   return (
     <div className="flex h-full overflow-hidden">
       {/* List */}
-      <div className="w-80 shrink-0 border-r border-border/40 flex flex-col bg-background/40">
+      <div className={`${showDetail ? 'hidden md:flex' : 'flex'} w-full md:w-80 shrink-0 border-r border-border/40 flex-col bg-background/40`}>
         <div className="p-4 border-b border-border/40 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -477,7 +479,16 @@ function PromptsPage() {
       </div>
 
       {/* Detail */}
-      <div className="flex-1 overflow-y-auto">
+      <div className={`${showDetail ? 'block' : 'hidden md:block'} flex-1 overflow-y-auto`}>
+        {/* Mobile back button */}
+        {showDetail && (
+          <button
+            onClick={() => { setSelected(null); setEditing(null); }}
+            className="md:hidden sticky top-0 z-10 w-full flex items-center gap-1.5 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground border-b border-border/30 bg-background/80 backdrop-blur"
+          >
+            ← Back to prompts
+          </button>
+        )}
         <AnimatePresence mode="wait">
           {editing ? (
             <motion.div
@@ -485,7 +496,7 @@ function PromptsPage() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="max-w-3xl mx-auto p-8 space-y-5"
+              className="max-w-3xl mx-auto p-4 md:p-8 space-y-5"
             >
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">{editing.id ? 'Edit prompt' : 'New prompt'}</h2>
@@ -580,7 +591,7 @@ function PromptsPage() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="max-w-3xl mx-auto p-8 space-y-6"
+              className="max-w-3xl mx-auto p-4 md:p-8 space-y-6"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
