@@ -296,7 +296,7 @@ function VoicePage() {
                           <div className="flex-1 min-w-0">
                             <span className="text-sm truncate block">{p.name}</span>
                             {p.isGuest && (
-                              <span className="inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold">
+                              <span className="inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/15 text-primary font-semibold">
                                 Guest
                               </span>
                             )}
