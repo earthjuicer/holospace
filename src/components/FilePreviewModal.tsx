@@ -45,6 +45,8 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
   const [copied, setCopied] = useState(false);
   // Visual feedback while swiping (shifts the media + dims the off-screen direction).
   const [swipeDx, setSwipeDx] = useState(0);
+  // One-time pulse hint on the prev/next arrows so first-time users notice them.
+  const [showNavHint, setShowNavHint] = useState(false);
 
   useEffect(() => {
     if (!file) {
@@ -90,11 +92,33 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
   }, [file, siblings]);
 
   const goPrev = () => {
-    if (prev && onNavigate) onNavigate(prev);
+    if (prev && onNavigate) {
+      onNavigate(prev);
+      setShowNavHint(false);
+    }
   };
   const goNext = () => {
-    if (next && onNavigate) onNavigate(next);
+    if (next && onNavigate) {
+      onNavigate(next);
+      setShowNavHint(false);
+    }
   };
+
+  // Show the pulse hint exactly once per user when they open a multi-file folder.
+  useEffect(() => {
+    if (!file) return;
+    const hasSiblings = !!siblings && siblings.length > 1;
+    if (!hasSiblings) return;
+    try {
+      if (localStorage.getItem("preview-nav-hint-seen")) return;
+      setShowNavHint(true);
+      localStorage.setItem("preview-nav-hint-seen", "1");
+      const t = setTimeout(() => setShowNavHint(false), 4500);
+      return () => clearTimeout(t);
+    } catch {
+      // localStorage unavailable — silently skip the hint.
+    }
+  }, [file?.id, siblings?.length]);
 
   // Touch swipe gestures (mobile). Horizontal swipe > threshold navigates;
   // vertical-dominant swipes are ignored so page scroll/pinch still works.
@@ -341,11 +365,13 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
                   e.stopPropagation();
                   goPrev();
                 }}
-                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-background/80 hover:bg-background border border-border/40 text-foreground shadow-lg backdrop-blur transition-colors"
+                className={`absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 z-10 p-4 sm:p-5 rounded-full bg-background/85 hover:bg-background border border-border/50 text-foreground shadow-xl backdrop-blur transition-all hover:scale-110 active:scale-95 ${
+                  showNavHint ? "ring-2 ring-primary/70 animate-pulse" : ""
+                }`}
                 title="Previous (←)"
                 aria-label="Previous file"
               >
-                <ChevronLeft size={20} />
+                <ChevronLeft size={28} strokeWidth={2.5} />
               </button>
             )}
             {next && (
@@ -355,11 +381,13 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
                   e.stopPropagation();
                   goNext();
                 }}
-                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-background/80 hover:bg-background border border-border/40 text-foreground shadow-lg backdrop-blur transition-colors"
+                className={`absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 z-10 p-4 sm:p-5 rounded-full bg-background/85 hover:bg-background border border-border/50 text-foreground shadow-xl backdrop-blur transition-all hover:scale-110 active:scale-95 ${
+                  showNavHint ? "ring-2 ring-primary/70 animate-pulse" : ""
+                }`}
                 title="Next (→)"
                 aria-label="Next file"
               >
-                <ChevronRight size={20} />
+                <ChevronRight size={28} strokeWidth={2.5} />
               </button>
             )}
             {loading || !url ? (
