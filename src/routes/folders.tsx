@@ -5,10 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
   FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe, Upload,
-  File as FileIcon, Image as ImageIcon, Video, Music, FileText, Loader2,
+  File as FileIcon, Image as ImageIcon, Video, Music, FileText, Loader2, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFileToFolder } from "@/lib/folder-upload";
+import { FilePreviewModal, type PreviewFile } from "@/components/FilePreviewModal";
 
 export const Route = createFileRoute("/folders")({
   head: () => ({
@@ -46,6 +47,7 @@ interface LatestFile {
   file_name: string;
   mime_type: string | null;
   storage_path: string;
+  size_bytes: number;
   /** Signed URL for image previews; only set when mime starts with image/. */
   thumbUrl?: string;
 }
@@ -75,6 +77,38 @@ function FoldersPage() {
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
   const [sharingBusyFolderId, setSharingBusyFolderId] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const downloadFile = async (file: LatestFile) => {
+    setDownloadingId(file.id);
+    try {
+      const { data, error } = await supabase.storage
+        .from("folder-files")
+        .createSignedUrl(file.storage_path, 60, { download: file.file_name });
+      if (error || !data?.signedUrl) throw error ?? new Error("No URL");
+      const a = document.createElement("a");
+      a.href = data.signedUrl;
+      a.download = file.file_name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Download failed");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const openPreview = (file: LatestFile) => {
+    setPreviewFile({
+      id: file.id,
+      file_name: file.file_name,
+      mime_type: file.mime_type,
+      storage_path: file.storage_path,
+      size_bytes: file.size_bytes,
+    });
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -156,7 +190,7 @@ function FoldersPage() {
     // Latest file per folder for the preview chip on each card.
     const { data: latestRows } = await supabase
       .from("folder_files")
-      .select("id, folder_id, file_name, mime_type, storage_path, created_at")
+      .select("id, folder_id, file_name, mime_type, storage_path, size_bytes, created_at")
       .in("folder_id", folderIds)
       .order("created_at", { ascending: false });
 
@@ -168,6 +202,7 @@ function FoldersPage() {
         file_name: row.file_name,
         mime_type: row.mime_type,
         storage_path: row.storage_path,
+        size_bytes: row.size_bytes ?? 0,
       };
     });
 
@@ -492,31 +527,58 @@ function FoldersPage() {
                 </div>
 
                 {latest && (
-                  <Link
-                    to="/folders/$folderId"
-                    params={{ folderId: folder.id }}
+                  <div
                     className="mt-3 flex items-center gap-2.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
                     title={`Latest: ${latest.file_name}`}
                   >
-                    {latest.thumbUrl ? (
-                      <img
-                        src={latest.thumbUrl}
-                        alt={latest.file_name}
-                        className="w-10 h-10 rounded object-cover shrink-0"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded bg-background/60 flex items-center justify-center shrink-0">
-                        {LatestIcon ? <LatestIcon size={18} className="text-muted-foreground" /> : null}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openPreview(latest);
+                      }}
+                      className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+                      aria-label={`Open ${latest.file_name}`}
+                    >
+                      {latest.thumbUrl ? (
+                        <img
+                          src={latest.thumbUrl}
+                          alt={latest.file_name}
+                          className="w-10 h-10 rounded object-cover shrink-0"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded bg-background/60 flex items-center justify-center shrink-0">
+                          {LatestIcon ? <LatestIcon size={18} className="text-muted-foreground" /> : null}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
+                          Latest file
+                        </div>
+                        <div className="text-xs text-foreground truncate">{latest.file_name}</div>
                       </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
-                        Latest file
-                      </div>
-                      <div className="text-xs text-foreground truncate">{latest.file_name}</div>
-                    </div>
-                  </Link>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        downloadFile(latest);
+                      }}
+                      disabled={downloadingId === latest.id}
+                      className="p-2 rounded-md hover:bg-primary/10 text-primary shrink-0 disabled:opacity-50"
+                      title="Download file"
+                      aria-label={`Download ${latest.file_name}`}
+                    >
+                      {downloadingId === latest.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Download size={14} />
+                      )}
+                    </button>
+                  </div>
                 )}
 
                 <AnimatePresence>
@@ -590,31 +652,58 @@ function FoldersPage() {
                       </div>
                     </Link>
                     {latest && (
-                      <Link
-                        to="/folders/$folderId"
-                        params={{ folderId: folder.id }}
+                      <div
                         className="mt-3 flex items-center gap-2.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
                         title={`Latest: ${latest.file_name}`}
                       >
-                        {latest.thumbUrl ? (
-                          <img
-                            src={latest.thumbUrl}
-                            alt={latest.file_name}
-                            className="w-10 h-10 rounded object-cover shrink-0"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded bg-background/60 flex items-center justify-center shrink-0">
-                            {LatestIcon ? <LatestIcon size={18} className="text-muted-foreground" /> : null}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openPreview(latest);
+                          }}
+                          className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+                          aria-label={`Open ${latest.file_name}`}
+                        >
+                          {latest.thumbUrl ? (
+                            <img
+                              src={latest.thumbUrl}
+                              alt={latest.file_name}
+                              className="w-10 h-10 rounded object-cover shrink-0"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded bg-background/60 flex items-center justify-center shrink-0">
+                              {LatestIcon ? <LatestIcon size={18} className="text-muted-foreground" /> : null}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
+                              Latest file
+                            </div>
+                            <div className="text-xs text-foreground truncate">{latest.file_name}</div>
                           </div>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
-                            Latest file
-                          </div>
-                          <div className="text-xs text-foreground truncate">{latest.file_name}</div>
-                        </div>
-                      </Link>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            downloadFile(latest);
+                          }}
+                          disabled={downloadingId === latest.id}
+                          className="p-2 rounded-md hover:bg-primary/10 text-primary shrink-0 disabled:opacity-50"
+                          title="Download file"
+                          aria-label={`Download ${latest.file_name}`}
+                        >
+                          {downloadingId === latest.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Download size={14} />
+                          )}
+                        </button>
+                      </div>
                     )}
                   </motion.div>
                 );
@@ -623,6 +712,7 @@ function FoldersPage() {
           </>
         )}
       </motion.div>
+      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
     </div>
   );
 }
