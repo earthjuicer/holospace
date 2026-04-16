@@ -382,6 +382,24 @@ export function useLiveKitRoom() {
     []
   );
 
+  // Poll Participant.audioLevel at ~10Hz so the UI can render a live mic
+  // meter beside every participant. Cheaper than wiring AudioContext analyzers
+  // and accurate enough to answer "is this person actually transmitting?".
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected) return;
+    const id = setInterval(() => {
+      const r = roomRef.current;
+      if (!r) return;
+      const next: Record<string, number> = {};
+      next[r.localParticipant.identity] = r.localParticipant.audioLevel ?? 0;
+      r.remoteParticipants.forEach((p) => {
+        next[p.identity] = p.audioLevel ?? 0;
+      });
+      setAudioLevels(next);
+    }, 100);
+    return () => clearInterval(id);
+  }, [connectionState]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -398,6 +416,7 @@ export function useLiveKitRoom() {
     isConnected: connectionState === ConnectionState.Connected,
     participants,
     screenShares,
+    audioLevels,
     isMuted,
     isSharing,
     needsAudioUnlock,
