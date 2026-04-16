@@ -20,6 +20,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FoldersRouteImport } from './routes/folders'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TextChannelIdRouteImport } from './routes/text.$channelId'
 import { Route as EditorDocIdRouteImport } from './routes/editor.$docId'
 
 const VoiceRoute = VoiceRouteImport.update({
@@ -77,6 +78,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TextChannelIdRoute = TextChannelIdRouteImport.update({
+  id: '/text/$channelId',
+  path: '/text/$channelId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EditorDocIdRoute = EditorDocIdRouteImport.update({
   id: '/editor/$docId',
   path: '/editor/$docId',
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/voice': typeof VoiceRoute
   '/editor/$docId': typeof EditorDocIdRoute
+  '/text/$channelId': typeof TextChannelIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/voice': typeof VoiceRoute
   '/editor/$docId': typeof EditorDocIdRoute
+  '/text/$channelId': typeof TextChannelIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/voice': typeof VoiceRoute
   '/editor/$docId': typeof EditorDocIdRoute
+  '/text/$channelId': typeof TextChannelIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/voice'
     | '/editor/$docId'
+    | '/text/$channelId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/voice'
     | '/editor/$docId'
+    | '/text/$channelId'
   id:
     | '__root__'
     | '/'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/voice'
     | '/editor/$docId'
+    | '/text/$channelId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +196,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   VoiceRoute: typeof VoiceRoute
   EditorDocIdRoute: typeof EditorDocIdRoute
+  TextChannelIdRoute: typeof TextChannelIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -265,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/text/$channelId': {
+      id: '/text/$channelId'
+      path: '/text/$channelId'
+      fullPath: '/text/$channelId'
+      preLoaderRoute: typeof TextChannelIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/editor/$docId': {
       id: '/editor/$docId'
       path: '/editor/$docId'
@@ -288,6 +308,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   VoiceRoute: VoiceRoute,
   EditorDocIdRoute: EditorDocIdRoute,
+  TextChannelIdRoute: TextChannelIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
