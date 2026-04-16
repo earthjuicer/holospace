@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +47,7 @@ interface AuthorProfile {
 function TextChannelPage() {
   const { channelId } = Route.useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [channel, setChannel] = useState<ChannelInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [authors, setAuthors] = useState<Record<string, AuthorProfile>>({});
@@ -137,7 +138,12 @@ function TextChannelPage() {
 
   return (
     <div className="flex h-full">
-      <ChannelSidebar activeTextId={channelId} onJoinVoice={() => {}} />
+      <ChannelSidebar
+        activeTextId={channelId}
+        onJoinVoice={(ch) =>
+          navigate({ to: "/voice", search: { channelId: ch.id } })
+        }
+      />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
