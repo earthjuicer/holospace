@@ -265,12 +265,39 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
 
           {/* Content */}
           <div
-            className="flex-1 overflow-auto flex items-center justify-center p-4"
+            className="flex-1 overflow-auto flex items-center justify-center p-4 relative"
             onClick={(e) => {
               // Click on backdrop (not on media) closes
               if (e.target === e.currentTarget) onClose();
             }}
           >
+            {/* Prev / Next navigation */}
+            {prev && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goPrev();
+                }}
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-background/80 hover:bg-background border border-border/40 text-foreground shadow-lg backdrop-blur transition-colors"
+                title="Previous (←)"
+                aria-label="Previous file"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
+            {next && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goNext();
+                }}
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-background/80 hover:bg-background border border-border/40 text-foreground shadow-lg backdrop-blur transition-colors"
+                title="Next (→)"
+                aria-label="Next file"
+              >
+                <ChevronRight size={20} />
+              </button>
+            )}
             {loading || !url ? (
               <Loader2 className="animate-spin text-primary" size={32} />
             ) : isImage ? (
