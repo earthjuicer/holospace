@@ -390,13 +390,15 @@ function VoicePage() {
                 </div>
 
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={(e) => copyInviteLink(activeChannelData, e)}
-                    className="p-2.5 rounded-xl bg-muted/50 text-foreground hover:bg-muted transition-all"
-                    title="Copy invite link"
-                  >
-                    {copiedId === activeChannelData.id ? <Check size={18} /> : <Copy size={18} />}
-                  </button>
+                  {activeChannelData.created_by === user?.id && (
+                    <button
+                      onClick={(e) => copyInviteLink(activeChannelData, e)}
+                      className="p-2.5 rounded-xl bg-muted/50 text-foreground hover:bg-muted transition-all"
+                      title="Copy invite link"
+                    >
+                      {copiedId === activeChannelData.id ? <Check size={18} /> : <Copy size={18} />}
+                    </button>
+                  )}
                   <button
                     onClick={() => setIsMuted(!isMuted)}
                     className={`p-2.5 rounded-xl transition-all ${
