@@ -32,8 +32,11 @@ export const Route = createRootRoute({
       { title: "Workspace — Your Productivity Hub" },
       { name: "description", content: "A beautiful, Notion-inspired productivity app with documents, tasks, and calendar." },
       { property: "og:title", content: "Workspace — Your Productivity Hub" },
-      { property: "og:description", content: "A beautiful, Notion-inspired productivity app." },
+      { property: "og:description", content: "A beautiful, Notion-inspired productivity app with documents, tasks, and calendar." },
       { property: "og:type", content: "website" },
+      { name: "twitter:title", content: "Workspace — Your Productivity Hub" },
+      { name: "twitter:description", content: "A beautiful, Notion-inspired productivity app with documents, tasks, and calendar." },
+      { name: "twitter:card", content: "summary" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
