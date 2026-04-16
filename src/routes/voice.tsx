@@ -8,8 +8,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
-import { useScreenShare } from "@/hooks/use-screen-share";
+import { useLiveKitRoom } from "@/hooks/use-livekit-room";
 import { ScreenShareControls } from "@/components/ScreenShareControls";
+import { ScreenShareViewer } from "@/components/ScreenShareViewer";
 
 export const Route = createFileRoute("/voice")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -30,14 +31,6 @@ interface VoiceChannel {
   created_by: string;
   is_active: boolean;
   max_participants: number;
-  invite_code?: string; // only present for channels the user created
-}
-
-interface Participant {
-  user_id: string;
-  display_name: string;
-  avatar_url: string | null;
-  is_muted: boolean;
 }
 
 function VoicePage() {
@@ -46,14 +39,13 @@ function VoicePage() {
   const { join: joinCode } = Route.useSearch();
   const [channels, setChannels] = useState<VoiceChannel[]>([]);
   const [activeChannel, setActiveChannel] = useState<string | null>(null);
-  const [participants, setParticipants] = useState<Record<string, Participant[]>>({});
-  const [isMuted, setIsMuted] = useState(false);
-  const [isDeafened, setIsDeafened] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const screenShare = useScreenShare();
+  const [isDeafened, setIsDeafened] = useState(false);
+  const lastChannelRef = useRef<string | null>(null);
+
+  const lk = useLiveKitRoom();
 
   useEffect(() => {
     fetchChannels();
@@ -66,7 +58,7 @@ function VoicePage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Auto-join via invite link — uses RPC since the channel may not be in the user's visible list yet
+  // Auto-join via invite link
   useEffect(() => {
     if (!joinCode || !user || activeChannel) return;
     (async () => {
@@ -82,6 +74,7 @@ function VoicePage() {
       }
       navigate({ to: "/voice", search: {} as any, replace: true });
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [joinCode, user]);
 
   const fetchChannels = async () => {
@@ -108,37 +101,17 @@ function VoicePage() {
     }
   };
 
-  // Subscribe to presence for ALL channels so we can show participant counts
+  // Apply deafen by muting all remote audio elements (LiveKit auto-attaches them)
   useEffect(() => {
-    if (channels.length === 0) return;
-    const subs = channels.map((channel) => {
-      const presenceCh = supabase.channel(`voice_presence_${channel.id}`, {
-        config: { presence: { key: user?.id || "anon" } },
-      });
-      presenceCh
-        .on("presence", { event: "sync" }, () => {
-          const state = presenceCh.presenceState<Participant>();
-          const list: Participant[] = [];
-          Object.values(state).forEach((arr) => arr.forEach((p) => list.push(p)));
-          setParticipants((prev) => ({ ...prev, [channel.id]: list }));
-        })
-        .subscribe();
-      return presenceCh;
+    if (typeof document === "undefined") return;
+    document.querySelectorAll("audio").forEach((el) => {
+      (el as HTMLAudioElement).muted = isDeafened;
     });
-    return () => {
-      subs.forEach((s) => supabase.removeChannel(s));
-    };
-  }, [channels.map((c) => c.id).join(","), user?.id]);
+  }, [isDeafened, lk.participants.length]);
 
   const joinChannel = async (channelId: string) => {
     if (!user) return;
-    // Leave previous channel if any
-    if (presenceChannelRef.current) {
-      await supabase.removeChannel(presenceChannelRef.current);
-      presenceChannelRef.current = null;
-    }
-
-    setActiveChannel(channelId);
+    if (lastChannelRef.current === channelId && lk.isConnected) return;
 
     // Get profile for display
     const { data: profile } = await supabase
@@ -147,74 +120,35 @@ function VoicePage() {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    const presenceCh = supabase.channel(`voice_presence_${channelId}`, {
-      config: { presence: { key: user.id } },
-    });
+    const displayName = profile?.display_name || user.email?.split("@")[0] || "User";
 
-    presenceCh
-      .on("presence", { event: "sync" }, () => {
-        const state = presenceCh.presenceState<Participant>();
-        const list: Participant[] = [];
-        Object.values(state).forEach((arr) => arr.forEach((p) => list.push(p)));
-        setParticipants((prev) => ({ ...prev, [channelId]: list }));
-      })
-      .on("presence", { event: "join" }, ({ key }) => {
-        // Don't play for our own join — that's handled below
-        if (key !== user.id) playJoinSound();
-      })
-      .on("presence", { event: "leave" }, ({ key }) => {
-        if (key !== user.id) playLeaveSound();
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await presenceCh.track({
-            user_id: user.id,
-            display_name: profile?.display_name || user.email?.split("@")[0] || "User",
-            avatar_url: profile?.avatar_url || null,
-            is_muted: isMuted,
-          });
-        }
-      });
+    setActiveChannel(channelId);
+    lastChannelRef.current = channelId;
 
-    presenceChannelRef.current = presenceCh;
-    playJoinSound();
-    toast.success("Joined voice channel");
+    try {
+      await lk.connect(`voice-${channelId}`, displayName);
+      playJoinSound();
+      toast.success("Joined voice channel");
+    } catch {
+      setActiveChannel(null);
+      lastChannelRef.current = null;
+    }
   };
 
   const leaveChannel = async () => {
-    if (presenceChannelRef.current) {
-      await presenceChannelRef.current.untrack();
-      await supabase.removeChannel(presenceChannelRef.current);
-      presenceChannelRef.current = null;
-    }
-    if (screenShare.isSharing) screenShare.stopShare();
+    await lk.disconnect();
     setActiveChannel(null);
-    setIsMuted(false);
+    lastChannelRef.current = null;
     setIsDeafened(false);
     playLeaveSound();
     toast("Left voice channel");
   };
 
-  const toggleMute = () => {
-    setIsMuted((prev) => {
-      const next = !prev;
-      if (next) playMuteSound();
-      else playUnmuteSound();
-      return next;
-    });
+  const handleToggleMute = async () => {
+    const nextMuted = await lk.toggleMute();
+    if (nextMuted) playMuteSound();
+    else playUnmuteSound();
   };
-
-  // Update mute state in presence
-  useEffect(() => {
-    if (presenceChannelRef.current && activeChannel && user) {
-      presenceChannelRef.current.track({
-        user_id: user.id,
-        display_name: user.email?.split("@")[0] || "User",
-        avatar_url: null,
-        is_muted: isMuted,
-      });
-    }
-  }, [isMuted]);
 
   const copyInviteLink = async (channel: VoiceChannel, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -232,14 +166,12 @@ function VoicePage() {
     const link = `${window.location.origin}/voice?join=${code}`;
     navigator.clipboard.writeText(link);
     setCopiedId(channel.id);
-    toast.success("Invite link copied!", {
-      description: `Code: ${code}`,
-    });
+    toast.success("Invite link copied!", { description: `Code: ${code}` });
     setTimeout(() => setCopiedId(null), 2000);
   };
 
   const activeChannelData = channels.find((c) => c.id === activeChannel);
-  const activeParticipants = activeChannel ? participants[activeChannel] || [] : [];
+  const activeParticipants = activeChannel ? lk.participants : [];
 
   return (
     <div className="max-w-4xl mx-auto px-4 md:px-8 py-6 md:py-10">
@@ -255,7 +187,7 @@ function VoicePage() {
               Voice Channels
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Join a channel or share an invite link with your team
+              Real-time voice & screen share, powered by LiveKit
             </p>
           </div>
           <button
@@ -294,10 +226,13 @@ function VoicePage() {
           )}
         </AnimatePresence>
 
+        {/* Active screen shares (rendered above channel list when in a channel) */}
+        {activeChannel && <ScreenShareViewer shares={lk.screenShares} />}
+
         <div className="space-y-2">
           {channels.map((channel, i) => {
-            const channelParticipants = participants[channel.id] || [];
             const isActive = activeChannel === channel.id;
+            const channelParticipants = isActive ? activeParticipants : [];
             return (
               <motion.div
                 key={channel.id}
@@ -320,7 +255,7 @@ function VoicePage() {
                       <div className="font-medium text-foreground">{channel.name}</div>
                       <div className="text-xs text-muted-foreground flex items-center gap-1">
                         <Users size={12} />
-                        {channelParticipants.length} connected
+                        {isActive ? `${channelParticipants.length} connected` : "Click to join"}
                       </div>
                     </div>
                   </div>
@@ -336,32 +271,33 @@ function VoicePage() {
                       </button>
                     )}
                     {isActive && (
-                      <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-500 text-xs font-medium">
+                      <span className="px-2 py-1 rounded-full bg-primary/20 text-primary text-xs font-medium">
                         Connected
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Participant avatars */}
-                {channelParticipants.length > 0 && (
+                {/* Participant avatars (only for the active channel) */}
+                {isActive && channelParticipants.length > 0 && (
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/40">
                     <div className="flex -space-x-2">
                       {channelParticipants.slice(0, 6).map((p) => (
                         <div
-                          key={p.user_id}
-                          className="w-7 h-7 rounded-full ring-2 ring-background bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white text-xs font-medium relative"
-                          title={p.display_name}
+                          key={p.identity}
+                          className={`w-7 h-7 rounded-full ring-2 ring-background bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white text-xs font-medium relative ${
+                            p.isSpeaking ? "ring-primary" : ""
+                          }`}
+                          title={p.name + (p.isMuted ? " (muted)" : "")}
                         >
-                          {p.avatar_url ? (
-                            <img src={p.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
-                          ) : (
-                            p.display_name.charAt(0).toUpperCase()
-                          )}
-                          {p.is_muted && (
+                          {p.name.charAt(0).toUpperCase()}
+                          {p.isMuted && (
                             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-destructive flex items-center justify-center">
                               <MicOff size={8} className="text-white" />
                             </div>
+                          )}
+                          {p.isScreenSharing && (
+                            <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-primary ring-1 ring-background" />
                           )}
                         </div>
                       ))}
@@ -370,11 +306,6 @@ function VoicePage() {
                       <span className="text-xs text-muted-foreground">
                         +{channelParticipants.length - 6} more
                       </span>
-                    )}
-                    {channel.created_by === user?.id && channel.invite_code && (
-                      <code className="ml-auto text-[10px] text-muted-foreground/60 font-mono">
-                        #{channel.invite_code}
-                      </code>
                     )}
                   </div>
                 )}
@@ -403,7 +334,11 @@ function VoicePage() {
             >
               <div className="glass-strong px-4 md:px-6 py-3 flex items-center gap-3 md:gap-4 shadow-2xl flex-wrap justify-center">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      lk.isConnected ? "bg-primary animate-pulse" : "bg-muted-foreground"
+                    }`}
+                  />
                   <span className="text-sm font-medium text-foreground">
                     {activeChannelData.name}
                   </span>
@@ -423,21 +358,20 @@ function VoicePage() {
                     </button>
                   )}
                   <ScreenShareControls
-                    isSharing={screenShare.isSharing}
-                    stream={screenShare.stream}
-                    onStart={(opts) => screenShare.startShare(opts)}
-                    onStop={screenShare.stopShare}
+                    isSharing={lk.isSharing}
+                    onStart={(opts) => lk.startScreenShare(opts)}
+                    onStop={lk.stopScreenShare}
                   />
                   <button
-                    onClick={toggleMute}
+                    onClick={handleToggleMute}
                     className={`p-2.5 rounded-xl transition-all ${
-                      isMuted
+                      lk.isMuted
                         ? "bg-destructive/20 text-destructive"
                         : "bg-muted/50 text-foreground hover:bg-muted"
                     }`}
-                    title={isMuted ? "Unmute" : "Mute"}
+                    title={lk.isMuted ? "Unmute" : "Mute"}
                   >
-                    {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+                    {lk.isMuted ? <MicOff size={18} /> : <Mic size={18} />}
                   </button>
                   <button
                     onClick={() => setIsDeafened(!isDeafened)}
@@ -446,12 +380,14 @@ function VoicePage() {
                         ? "bg-destructive/20 text-destructive"
                         : "bg-muted/50 text-foreground hover:bg-muted"
                     }`}
+                    title={isDeafened ? "Undeafen" : "Deafen"}
                   >
                     <Headphones size={18} />
                   </button>
                   <button
                     onClick={leaveChannel}
                     className="p-2.5 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
+                    title="Leave channel"
                   >
                     <PhoneOff size={18} />
                   </button>

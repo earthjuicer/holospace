@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MonitorUp, Settings2, X } from "lucide-react";
 import {
@@ -11,13 +11,11 @@ interface ScreenShareSettings {
   quality: ScreenShareQuality;
   fps: ScreenShareFps;
   includeAudio: boolean;
-  cursor: "always" | "motion" | "never";
 }
 
 interface Props {
   isSharing: boolean;
-  stream: MediaStream | null;
-  onStart: (opts: ScreenShareSettings) => void;
+  onStart: (opts: { width: number; height: number; fps: number; audio: boolean }) => void;
   onStop: () => void;
 }
 
@@ -27,7 +25,6 @@ const DEFAULT_SETTINGS: ScreenShareSettings = {
   quality: "1080p",
   fps: 30,
   includeAudio: true,
-  cursor: "always",
 };
 
 function loadSettings(): ScreenShareSettings {
@@ -39,11 +36,9 @@ function loadSettings(): ScreenShareSettings {
   return DEFAULT_SETTINGS;
 }
 
-export function ScreenShareControls({ isSharing, stream, onStart, onStop }: Props) {
+export function ScreenShareControls({ isSharing, onStart, onStop }: Props) {
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<ScreenShareSettings>(DEFAULT_SETTINGS);
-  const [showPreview, setShowPreview] = useState(true);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     setSettings(loadSettings());
@@ -55,18 +50,19 @@ export function ScreenShareControls({ isSharing, stream, onStart, onStop }: Prop
     } catch {}
   }, [settings]);
 
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    }
-  }, [stream]);
+  const fireStart = (s: ScreenShareSettings) => {
+    const preset = QUALITY_PRESETS[s.quality];
+    onStart({
+      width: preset.width,
+      height: preset.height,
+      fps: s.fps,
+      audio: s.includeAudio,
+    });
+  };
 
   const handleClick = () => {
-    if (isSharing) {
-      onStop();
-    } else {
-      onStart(settings);
-    }
+    if (isSharing) onStop();
+    else fireStart(settings);
   };
 
   return (
@@ -92,39 +88,6 @@ export function ScreenShareControls({ isSharing, stream, onStart, onStop }: Prop
         </button>
       </div>
 
-      {/* Local preview */}
-      <AnimatePresence>
-        {isSharing && stream && showPreview && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed bottom-[160px] md:bottom-28 right-4 z-50 w-64 md:w-80 glass-strong rounded-xl overflow-hidden shadow-2xl"
-          >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
-              <span className="text-xs font-medium text-foreground flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-                You're sharing
-              </span>
-              <button
-                onClick={() => setShowPreview(false)}
-                className="p-1 rounded hover:bg-muted text-muted-foreground"
-              >
-                <X size={12} />
-              </button>
-            </div>
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              className="w-full aspect-video bg-black object-contain"
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Settings dialog */}
       <AnimatePresence>
         {showSettings && (
           <motion.div
@@ -155,7 +118,6 @@ export function ScreenShareControls({ isSharing, stream, onStart, onStop }: Prop
               </div>
 
               <div className="space-y-5">
-                {/* Quality */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-2 block uppercase tracking-wide">
                     Resolution
@@ -184,12 +146,11 @@ export function ScreenShareControls({ isSharing, stream, onStart, onStop }: Prop
                   </div>
                   {settings.quality === "4k" && (
                     <p className="text-[11px] text-destructive mt-2">
-                      ⚠ 4K requires a high-DPI display & strong upload bandwidth
+                      ⚠ 4K requires a high-DPI display & strong upload bandwidth (8+ Mbps)
                     </p>
                   )}
                 </div>
 
-                {/* FPS */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-2 block uppercase tracking-wide">
                     Frame Rate
@@ -210,42 +171,27 @@ export function ScreenShareControls({ isSharing, stream, onStart, onStop }: Prop
                     ))}
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-1.5">
-                    {settings.fps === 60 ? "Smooth — best for gaming/video" : settings.fps === 30 ? "Balanced — best for most content" : "Low bandwidth — best for static content"}
+                    {settings.fps === 60
+                      ? "Smooth — best for gaming/video"
+                      : settings.fps === 30
+                        ? "Balanced — best for most content"
+                        : "Low bandwidth — best for static content"}
                   </p>
                 </div>
 
-                {/* Cursor */}
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-2 block uppercase tracking-wide">
-                    Cursor
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(["always", "motion", "never"] as const).map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setSettings((s) => ({ ...s, cursor: c }))}
-                        className={`px-3 py-2 rounded-xl text-sm font-medium capitalize transition-all ${
-                          settings.cursor === c
-                            ? "gradient-accent text-white"
-                            : "bg-muted/40 text-foreground hover:bg-muted"
-                        }`}
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Audio toggle */}
                 <label className="flex items-center justify-between p-3 rounded-xl bg-muted/40 cursor-pointer hover:bg-muted/60 transition-all">
                   <div>
                     <div className="text-sm font-medium text-foreground">Share system audio</div>
-                    <div className="text-[11px] text-muted-foreground">Stream sound from the shared tab/screen</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Stream sound from the shared tab/screen
+                    </div>
                   </div>
                   <input
                     type="checkbox"
                     checked={settings.includeAudio}
-                    onChange={(e) => setSettings((s) => ({ ...s, includeAudio: e.target.checked }))}
+                    onChange={(e) =>
+                      setSettings((s) => ({ ...s, includeAudio: e.target.checked }))
+                    }
                     className="w-5 h-5 accent-primary"
                   />
                 </label>
@@ -261,7 +207,7 @@ export function ScreenShareControls({ isSharing, stream, onStart, onStop }: Prop
                 <button
                   onClick={() => {
                     setShowSettings(false);
-                    if (!isSharing) onStart(settings);
+                    if (!isSharing) fireStart(settings);
                   }}
                   className="flex-1 px-4 py-2.5 rounded-xl gradient-accent text-white text-sm font-medium"
                 >
