@@ -195,7 +195,59 @@ export function useLiveKitRoom() {
           });
 
         await newRoom.connect(url, token);
-        await newRoom.localParticipant.setMicrophoneEnabled(true);
+
+        // Mobile browsers (especially iOS Safari) frequently fail to publish
+        // mic audio if we just call setMicrophoneEnabled(true) — the gesture
+        // chain is fragile and getUserMedia errors get swallowed. We request
+        // the mic stream explicitly with mobile-tuned constraints and surface
+        // any permission/hardware errors so the user knows why nobody can
+        // hear them.
+        try {
+          await newRoom.localParticipant.setMicrophoneEnabled(true, {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            // Mono + 48 kHz is the sweet spot for voice on mobile WebRTC stacks
+            channelCount: 1,
+            sampleRate: 48000,
+          });
+
+          // Verify the mic track actually published. If it didn't, mobile
+          // probably blocked getUserMedia silently — re-attempt with a bare
+          // request so the browser shows its permission UI.
+          const micPub = newRoom.localParticipant.getTrackPublication(
+            Track.Source.Microphone
+          );
+          if (!micPub || !micPub.track) {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+              },
+            });
+            const [audioTrack] = stream.getAudioTracks();
+            if (audioTrack) {
+              await newRoom.localParticipant.publishTrack(audioTrack, {
+                source: Track.Source.Microphone,
+              });
+            }
+          }
+        } catch (micErr: any) {
+          const name = micErr?.name || "";
+          if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+            toast.error(
+              "Microphone blocked. Enable mic access in your browser settings, then rejoin."
+            );
+          } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+            toast.error("No microphone found on this device.");
+          } else if (name === "NotReadableError" || name === "TrackStartError") {
+            toast.error("Microphone is in use by another app. Close it and rejoin.");
+          } else {
+            toast.error(micErr?.message || "Could not start microphone");
+          }
+        }
+
         // Required by some browsers (Safari, mobile Chrome) before remote audio plays.
         try {
           await newRoom.startAudio();
