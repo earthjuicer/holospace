@@ -415,6 +415,22 @@ function VoicePage() {
         </div>
       </div>
 
+      {/* Audio unlock prompt for mobile browsers that block autoplay */}
+      <AnimatePresence>
+        {activeChannel && lk.needsAudioUnlock && (
+          <motion.button
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 60, opacity: 0 }}
+            onClick={lk.unlockAudio}
+            className="fixed bottom-[150px] md:bottom-24 left-1/2 -translate-x-1/2 z-[60] px-4 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-medium shadow-2xl flex items-center gap-2 hover:bg-primary/90"
+          >
+            <Volume2 size={16} />
+            Tap to enable audio
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       {/* Floating control bar */}
       <AnimatePresence>
         {activeChannel && (
