@@ -275,6 +275,20 @@ export function useLiveKitRoom() {
     setIsSharing(false);
   }, []);
 
+  // Per-participant volume (0.0 to 1.0+). Local participant adjusts via the
+  // hidden <audio> element since RemoteParticipant.setVolume isn't applicable.
+  const setParticipantVolume = useCallback(
+    (identity: string, volume: number) => {
+      const r = roomRef.current;
+      if (!r) return;
+      const remote = r.remoteParticipants.get(identity);
+      if (remote) {
+        remote.setVolume(volume);
+      }
+    },
+    []
+  );
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -298,5 +312,6 @@ export function useLiveKitRoom() {
     toggleMute,
     startScreenShare,
     stopScreenShare,
+    setParticipantVolume,
   };
 }
