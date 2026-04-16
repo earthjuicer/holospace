@@ -202,30 +202,128 @@ export type Database = {
         }
         Relationships: []
       }
-      profiles: {
+      message_reactions: {
         Row: {
-          avatar_url: string | null
           created_at: string
-          display_name: string | null
+          emoji: string
           id: string
-          updated_at: string
+          message_id: string
           user_id: string
         }
         Insert: {
-          avatar_url?: string | null
           created_at?: string
-          display_name?: string | null
+          emoji: string
           id?: string
-          updated_at?: string
+          message_id: string
           user_id: string
         }
         Update: {
-          avatar_url?: string | null
           created_at?: string
+          emoji?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "text_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          actor_id: string
+          channel_id: string | null
+          created_at: string
+          id: string
+          message_id: string | null
+          preview: string | null
+          read_at: string | null
+          recipient_id: string
+          type: string
+        }
+        Insert: {
+          actor_id: string
+          channel_id?: string | null
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          preview?: string | null
+          read_at?: string | null
+          recipient_id: string
+          type: string
+        }
+        Update: {
+          actor_id?: string
+          channel_id?: string | null
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          preview?: string | null
+          read_at?: string | null
+          recipient_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "voice_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "text_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          accent_color: string | null
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          custom_status: string | null
+          display_name: string | null
+          id: string
+          status_emoji: string | null
+          updated_at: string
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          accent_color?: string | null
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          custom_status?: string | null
           display_name?: string | null
           id?: string
+          status_emoji?: string | null
+          updated_at?: string
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          accent_color?: string | null
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          custom_status?: string | null
+          display_name?: string | null
+          id?: string
+          status_emoji?: string | null
           updated_at?: string
           user_id?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -329,21 +427,36 @@ export type Database = {
           channel_id: string
           content: string
           created_at: string
+          deleted_at: string | null
+          edited_at: string | null
           id: string
+          mentioned_user_ids: string[] | null
+          reply_to_id: string | null
+          thread_root_id: string | null
         }
         Insert: {
           author_id: string
           channel_id: string
           content: string
           created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
           id?: string
+          mentioned_user_ids?: string[] | null
+          reply_to_id?: string | null
+          thread_root_id?: string | null
         }
         Update: {
           author_id?: string
           channel_id?: string
           content?: string
           created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
           id?: string
+          mentioned_user_ids?: string[] | null
+          reply_to_id?: string | null
+          thread_root_id?: string | null
         }
         Relationships: [
           {
@@ -351,6 +464,20 @@ export type Database = {
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "voice_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "text_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "text_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "text_messages_thread_root_id_fkey"
+            columns: ["thread_root_id"]
+            isOneToOne: false
+            referencedRelation: "text_messages"
             referencedColumns: ["id"]
           },
         ]
@@ -577,6 +704,19 @@ export type Database = {
           mime_type: string
           size_bytes: number
           storage_path: string
+        }[]
+      }
+      list_workspace_users: {
+        Args: never
+        Returns: {
+          accent_color: string
+          avatar_url: string
+          bio: string
+          custom_status: string
+          display_name: string
+          status_emoji: string
+          user_id: string
+          username: string
         }[]
       }
       regen_share_token: {
