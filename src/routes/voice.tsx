@@ -51,7 +51,10 @@ function VoicePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { join: joinCode, channelId: pendingChannelId } = Route.useSearch();
-  const [activeChannel, setActiveChannel] = useState<SidebarChannel | null>(null);
+  // Voice room state lives in a global provider so the connection survives
+  // route changes — users now stay in the channel until they hit "Leave".
+  const lk = useVoiceRoom();
+  const { activeChannel, setActiveChannel } = lk;
   const [isDeafened, setIsDeafened] = useState(false);
   const [pttActive, setPttActive] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -67,8 +70,6 @@ function VoicePage() {
   const [volumes, setVolumes] = useState<Record<string, number>>({});
   const lastChannelRef = useRef<string | null>(null);
   const pttHoldingRef = useRef(false);
-
-  const lk = useLiveKitRoom();
 
   // Tick every 30s to refresh expiry countdown
   useEffect(() => {
