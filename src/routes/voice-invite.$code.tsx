@@ -109,7 +109,21 @@ function VoiceInvitePage() {
         })
         .on(RoomEvent.ParticipantConnected, () => refreshParticipants(room))
         .on(RoomEvent.ParticipantDisconnected, () => refreshParticipants(room))
-        .on(RoomEvent.TrackSubscribed, () => refreshParticipants(room))
+        .on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
+          if (track.kind === Track.Kind.Audio) {
+            const el = (track as RemoteAudioTrack).attach();
+            el.setAttribute("data-lk-audio", "1");
+            el.style.display = "none";
+            document.body.appendChild(el);
+          }
+          refreshParticipants(room);
+        })
+        .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+          if (track.kind === Track.Kind.Audio) {
+            (track as RemoteAudioTrack).detach().forEach((el) => el.remove());
+          }
+          refreshParticipants(room);
+        })
         .on(RoomEvent.TrackMuted, () => refreshParticipants(room))
         .on(RoomEvent.TrackUnmuted, () => refreshParticipants(room))
         .on(RoomEvent.ActiveSpeakersChanged, () => refreshParticipants(room));
