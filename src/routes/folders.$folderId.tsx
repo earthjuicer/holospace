@@ -53,21 +53,45 @@ function FolderDetailPage() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      const { data: f } = await supabase
-        .from("folders")
-        .select("id, name, icon, owner_id")
-        .eq("id", folderId)
-        .maybeSingle();
-      setFolder(f);
-      const { data: s } = await supabase
-        .from("folder_public_shares")
-        .select("token, expires_at")
-        .eq("folder_id", folderId)
-        .maybeSingle();
-      setShare(s);
-      setLoading(false);
-    })();
+    let cancelled = false;
+
+    const loadFolder = async () => {
+      setLoading(true);
+      try {
+        const [{ data: f, error: folderError }, { data: s, error: shareError }] = await Promise.all([
+          supabase
+            .from("folders")
+            .select("id, name, icon, owner_id")
+            .eq("id", folderId)
+            .maybeSingle(),
+          supabase
+            .from("folder_public_shares")
+            .select("token, expires_at")
+            .eq("folder_id", folderId)
+            .maybeSingle(),
+        ]);
+
+        if (folderError) throw folderError;
+        if (shareError) throw shareError;
+        if (cancelled) return;
+
+        setFolder(f);
+        setShare(s);
+      } catch (error) {
+        if (!cancelled) {
+          setFolder(null);
+          setShare(null);
+          toast.error(error instanceof Error ? error.message : "Failed to load folder");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadFolder();
+    return () => {
+      cancelled = true;
+    };
   }, [folderId]);
 
   const isOwner = folder?.owner_id === user?.id;
@@ -79,23 +103,27 @@ function FolderDetailPage() {
       _folder_id: folderId,
     });
     if (error || !data?.[0]) {
-      toast.error("Failed to generate link");
+      toast.error(error?.message || "Failed to generate link");
       return;
     }
     setShare({ token: data[0].token, expires_at: data[0].expires_at });
     toast.success("New share link generated");
   };
 
-  const copy = () => {
-    navigator.clipboard.writeText(shareUrl);
-    toast.success("Link copied");
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Could not copy link");
+    }
   };
 
   const deleteFolder = async () => {
     if (!confirm(`Delete folder "${folder?.name}" and all its files?`)) return;
     const { error } = await supabase.from("folders").delete().eq("id", folderId);
     if (error) {
-      toast.error("Failed to delete folder");
+      toast.error(error.message || "Failed to delete folder");
     } else {
       toast.success("Folder deleted");
       navigate({ to: "/folders" });
