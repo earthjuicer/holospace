@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 import {
   Home, FileText, Kanban, Calendar, Settings, Search, Plus, Star,
   ChevronRight, PanelLeftClose, PanelLeft, Volume2, FolderLock, LogOut, User,
+  Sun, Moon,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -18,7 +19,7 @@ const NAV_ITEMS = [
 ];
 
 export function AppSidebar() {
-  const { documents, sidebarOpen, toggleSidebar, addDocument, toggleFavorite } = useAppStore();
+  const { documents, sidebarOpen, toggleSidebar, addDocument, toggleFavorite, settings, updateSettings } = useAppStore();
   const { user, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -210,7 +211,7 @@ export function AppSidebar() {
 
         {/* User info */}
         {user && sidebarOpen && (
-          <div className="px-3 pb-3 flex items-center gap-2">
+          <div className="px-3 pb-3 flex items-center gap-1.5">
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
               <User size={14} className="text-primary" />
             </div>
@@ -221,11 +222,29 @@ export function AppSidebar() {
               <div className="text-[10px] text-muted-foreground truncate">{user.email}</div>
             </div>
             <button
+              onClick={() => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' })}
+              className="p-1.5 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+              title={settings.theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+            >
+              {settings.theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+            <button
               onClick={handleSignOut}
               className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
               title="Sign out"
             >
               <LogOut size={14} />
+            </button>
+          </div>
+        )}
+        {!sidebarOpen && (
+          <div className="px-2 pb-3 flex flex-col items-center gap-1">
+            <button
+              onClick={() => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' })}
+              className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+              title={settings.theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+            >
+              {settings.theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
             </button>
           </div>
         )}
