@@ -527,31 +527,58 @@ function FoldersPage() {
                 </div>
 
                 {latest && (
-                  <Link
-                    to="/folders/$folderId"
-                    params={{ folderId: folder.id }}
+                  <div
                     className="mt-3 flex items-center gap-2.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
                     title={`Latest: ${latest.file_name}`}
                   >
-                    {latest.thumbUrl ? (
-                      <img
-                        src={latest.thumbUrl}
-                        alt={latest.file_name}
-                        className="w-10 h-10 rounded object-cover shrink-0"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded bg-background/60 flex items-center justify-center shrink-0">
-                        {LatestIcon ? <LatestIcon size={18} className="text-muted-foreground" /> : null}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openPreview(latest);
+                      }}
+                      className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+                      aria-label={`Open ${latest.file_name}`}
+                    >
+                      {latest.thumbUrl ? (
+                        <img
+                          src={latest.thumbUrl}
+                          alt={latest.file_name}
+                          className="w-10 h-10 rounded object-cover shrink-0"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded bg-background/60 flex items-center justify-center shrink-0">
+                          {LatestIcon ? <LatestIcon size={18} className="text-muted-foreground" /> : null}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
+                          Latest file
+                        </div>
+                        <div className="text-xs text-foreground truncate">{latest.file_name}</div>
                       </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
-                        Latest file
-                      </div>
-                      <div className="text-xs text-foreground truncate">{latest.file_name}</div>
-                    </div>
-                  </Link>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        downloadFile(latest);
+                      }}
+                      disabled={downloadingId === latest.id}
+                      className="p-2 rounded-md hover:bg-primary/10 text-primary shrink-0 disabled:opacity-50"
+                      title="Download file"
+                      aria-label={`Download ${latest.file_name}`}
+                    >
+                      {downloadingId === latest.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Download size={14} />
+                      )}
+                    </button>
+                  </div>
                 )}
 
                 <AnimatePresence>
