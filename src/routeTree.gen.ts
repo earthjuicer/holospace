@@ -21,6 +21,8 @@ import { Route as FoldersRouteImport } from './routes/folders'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TextChannelIdRouteImport } from './routes/text.$channelId'
+import { Route as ShareTokenRouteImport } from './routes/share.$token'
+import { Route as FoldersFolderIdRouteImport } from './routes/folders.$folderId'
 import { Route as EditorDocIdRouteImport } from './routes/editor.$docId'
 
 const VoiceRoute = VoiceRouteImport.update({
@@ -83,6 +85,16 @@ const TextChannelIdRoute = TextChannelIdRouteImport.update({
   path: '/text/$channelId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShareTokenRoute = ShareTokenRouteImport.update({
+  id: '/share/$token',
+  path: '/share/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FoldersFolderIdRoute = FoldersFolderIdRouteImport.update({
+  id: '/$folderId',
+  path: '/$folderId',
+  getParentRoute: () => FoldersRoute,
+} as any)
 const EditorDocIdRoute = EditorDocIdRouteImport.update({
   id: '/editor/$docId',
   path: '/editor/$docId',
@@ -92,7 +104,7 @@ const EditorDocIdRoute = EditorDocIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
-  '/folders': typeof FoldersRoute
+  '/folders': typeof FoldersRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/kanban': typeof KanbanRoute
   '/login': typeof LoginRoute
@@ -102,12 +114,14 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/voice': typeof VoiceRoute
   '/editor/$docId': typeof EditorDocIdRoute
+  '/folders/$folderId': typeof FoldersFolderIdRoute
+  '/share/$token': typeof ShareTokenRoute
   '/text/$channelId': typeof TextChannelIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
-  '/folders': typeof FoldersRoute
+  '/folders': typeof FoldersRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/kanban': typeof KanbanRoute
   '/login': typeof LoginRoute
@@ -117,13 +131,15 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/voice': typeof VoiceRoute
   '/editor/$docId': typeof EditorDocIdRoute
+  '/folders/$folderId': typeof FoldersFolderIdRoute
+  '/share/$token': typeof ShareTokenRoute
   '/text/$channelId': typeof TextChannelIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
-  '/folders': typeof FoldersRoute
+  '/folders': typeof FoldersRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/kanban': typeof KanbanRoute
   '/login': typeof LoginRoute
@@ -133,6 +149,8 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/voice': typeof VoiceRoute
   '/editor/$docId': typeof EditorDocIdRoute
+  '/folders/$folderId': typeof FoldersFolderIdRoute
+  '/share/$token': typeof ShareTokenRoute
   '/text/$channelId': typeof TextChannelIdRoute
 }
 export interface FileRouteTypes {
@@ -150,6 +168,8 @@ export interface FileRouteTypes {
     | '/signup'
     | '/voice'
     | '/editor/$docId'
+    | '/folders/$folderId'
+    | '/share/$token'
     | '/text/$channelId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -165,6 +185,8 @@ export interface FileRouteTypes {
     | '/signup'
     | '/voice'
     | '/editor/$docId'
+    | '/folders/$folderId'
+    | '/share/$token'
     | '/text/$channelId'
   id:
     | '__root__'
@@ -180,13 +202,15 @@ export interface FileRouteTypes {
     | '/signup'
     | '/voice'
     | '/editor/$docId'
+    | '/folders/$folderId'
+    | '/share/$token'
     | '/text/$channelId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CalendarRoute: typeof CalendarRoute
-  FoldersRoute: typeof FoldersRoute
+  FoldersRoute: typeof FoldersRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   KanbanRoute: typeof KanbanRoute
   LoginRoute: typeof LoginRoute
@@ -196,6 +220,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   VoiceRoute: typeof VoiceRoute
   EditorDocIdRoute: typeof EditorDocIdRoute
+  ShareTokenRoute: typeof ShareTokenRoute
   TextChannelIdRoute: typeof TextChannelIdRoute
 }
 
@@ -285,6 +310,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TextChannelIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/share/$token': {
+      id: '/share/$token'
+      path: '/share/$token'
+      fullPath: '/share/$token'
+      preLoaderRoute: typeof ShareTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/folders/$folderId': {
+      id: '/folders/$folderId'
+      path: '/$folderId'
+      fullPath: '/folders/$folderId'
+      preLoaderRoute: typeof FoldersFolderIdRouteImport
+      parentRoute: typeof FoldersRoute
+    }
     '/editor/$docId': {
       id: '/editor/$docId'
       path: '/editor/$docId'
@@ -295,10 +334,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface FoldersRouteChildren {
+  FoldersFolderIdRoute: typeof FoldersFolderIdRoute
+}
+
+const FoldersRouteChildren: FoldersRouteChildren = {
+  FoldersFolderIdRoute: FoldersFolderIdRoute,
+}
+
+const FoldersRouteWithChildren =
+  FoldersRoute._addFileChildren(FoldersRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CalendarRoute: CalendarRoute,
-  FoldersRoute: FoldersRoute,
+  FoldersRoute: FoldersRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   KanbanRoute: KanbanRoute,
   LoginRoute: LoginRoute,
@@ -308,8 +358,18 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   VoiceRoute: VoiceRoute,
   EditorDocIdRoute: EditorDocIdRoute,
+  ShareTokenRoute: ShareTokenRoute,
   TextChannelIdRoute: TextChannelIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
