@@ -418,10 +418,12 @@ function takeSnapshot(s: AppState): SyncedSnapshot {
 
 async function pushToBackend(userId: string) {
   const snapshot = takeSnapshot(useAppStore.getState());
+  // Cast through `any` because Supabase's generated jsonb type is overly
+  // restrictive (Json) — we genuinely store a structured snapshot here.
   const { data, error } = await supabase
     .from('user_workspace')
     .upsert(
-      [{ user_id: userId, data: snapshot as unknown as Record<string, unknown> }],
+      [{ user_id: userId, data: snapshot as any }],
       { onConflict: 'user_id' }
     )
     .select('updated_at')
