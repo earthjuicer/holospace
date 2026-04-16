@@ -9,20 +9,56 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VoiceRouteImport } from './routes/voice'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as KanbanRouteImport } from './routes/kanban'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as FoldersRouteImport } from './routes/folders'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EditorDocIdRouteImport } from './routes/editor.$docId'
 
+const VoiceRoute = VoiceRouteImport.update({
+  id: '/voice',
+  path: '/voice',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const KanbanRoute = KanbanRouteImport.update({
   id: '/kanban',
   path: '/kanban',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FoldersRoute = FoldersRouteImport.update({
+  id: '/folders',
+  path: '/folders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CalendarRoute = CalendarRouteImport.update({
@@ -44,49 +80,115 @@ const EditorDocIdRoute = EditorDocIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
+  '/folders': typeof FoldersRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/kanban': typeof KanbanRoute
+  '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
+  '/voice': typeof VoiceRoute
   '/editor/$docId': typeof EditorDocIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
+  '/folders': typeof FoldersRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/kanban': typeof KanbanRoute
+  '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
+  '/voice': typeof VoiceRoute
   '/editor/$docId': typeof EditorDocIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
+  '/folders': typeof FoldersRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/kanban': typeof KanbanRoute
+  '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
+  '/voice': typeof VoiceRoute
   '/editor/$docId': typeof EditorDocIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/calendar' | '/kanban' | '/settings' | '/editor/$docId'
+  fullPaths:
+    | '/'
+    | '/calendar'
+    | '/folders'
+    | '/forgot-password'
+    | '/kanban'
+    | '/login'
+    | '/reset-password'
+    | '/settings'
+    | '/signup'
+    | '/voice'
+    | '/editor/$docId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/calendar' | '/kanban' | '/settings' | '/editor/$docId'
+  to:
+    | '/'
+    | '/calendar'
+    | '/folders'
+    | '/forgot-password'
+    | '/kanban'
+    | '/login'
+    | '/reset-password'
+    | '/settings'
+    | '/signup'
+    | '/voice'
+    | '/editor/$docId'
   id:
     | '__root__'
     | '/'
     | '/calendar'
+    | '/folders'
+    | '/forgot-password'
     | '/kanban'
+    | '/login'
+    | '/reset-password'
     | '/settings'
+    | '/signup'
+    | '/voice'
     | '/editor/$docId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CalendarRoute: typeof CalendarRoute
+  FoldersRoute: typeof FoldersRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   KanbanRoute: typeof KanbanRoute
+  LoginRoute: typeof LoginRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
+  SignupRoute: typeof SignupRoute
+  VoiceRoute: typeof VoiceRoute
   EditorDocIdRoute: typeof EditorDocIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/voice': {
+      id: '/voice'
+      path: '/voice'
+      fullPath: '/voice'
+      preLoaderRoute: typeof VoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -94,11 +196,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/kanban': {
       id: '/kanban'
       path: '/kanban'
       fullPath: '/kanban'
       preLoaderRoute: typeof KanbanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/folders': {
+      id: '/folders'
+      path: '/folders'
+      fullPath: '/folders'
+      preLoaderRoute: typeof FoldersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/calendar': {
@@ -128,19 +258,16 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CalendarRoute: CalendarRoute,
+  FoldersRoute: FoldersRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   KanbanRoute: KanbanRoute,
+  LoginRoute: LoginRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
+  SignupRoute: SignupRoute,
+  VoiceRoute: VoiceRoute,
   EditorDocIdRoute: EditorDocIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

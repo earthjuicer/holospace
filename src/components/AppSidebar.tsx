@@ -1,22 +1,27 @@
 import { useState } from 'react';
-import { Link, useLocation } from '@tanstack/react-router';
+import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
+import { useAuth } from '@/hooks/use-auth';
 import {
   Home, FileText, Kanban, Calendar, Settings, Search, Plus, Star,
-  ChevronRight, PanelLeftClose, PanelLeft,
+  ChevronRight, PanelLeftClose, PanelLeft, Volume2, FolderLock, LogOut, User,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/' as const, icon: Home, label: 'Home' },
   { to: '/kanban' as const, icon: Kanban, label: 'Tasks' },
   { to: '/calendar' as const, icon: Calendar, label: 'Calendar' },
+  { to: '/folders' as const, icon: FolderLock, label: 'Folders' },
+  { to: '/voice' as const, icon: Volume2, label: 'Voice' },
   { to: '/settings' as const, icon: Settings, label: 'Settings' },
 ];
 
 export function AppSidebar() {
   const { documents, sidebarOpen, toggleSidebar, addDocument, toggleFavorite } = useAppStore();
+  const { user, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchFilter, setSearchFilter] = useState('');
   const [pagesExpanded, setPagesExpanded] = useState(true);
 
@@ -25,8 +30,9 @@ export function AppSidebar() {
     d.title.toLowerCase().includes(searchFilter.toLowerCase())
   );
 
-  const handleNewPage = () => {
-    addDocument();
+  const handleSignOut = async () => {
+    await signOut();
+    navigate({ to: '/login' });
   };
 
   return (
@@ -182,23 +188,47 @@ export function AppSidebar() {
         )}
       </div>
 
-      {/* New page button */}
-      <div className="p-3 border-t border-border/30">
-        <Link
-          to="/editor/$docId"
-          params={{ docId: 'new' }}
-          onClick={(e) => {
-            e.preventDefault();
-            const id = addDocument();
-            window.location.href = `/editor/${id}`;
-          }}
-          className={`flex items-center justify-center gap-2 w-full py-2 rounded-xl gradient-accent text-white text-sm font-medium transition-all hover:opacity-90 active:scale-[0.97] ${
-            !sidebarOpen ? 'px-2' : 'px-3'
-          }`}
-        >
-          <Plus size={16} />
-          {sidebarOpen && <span>New Page</span>}
-        </Link>
+      {/* Bottom: New page + user */}
+      <div className="border-t border-border/30">
+        <div className="p-3">
+          <Link
+            to="/editor/$docId"
+            params={{ docId: 'new' }}
+            onClick={(e) => {
+              e.preventDefault();
+              const id = addDocument();
+              window.location.href = `/editor/${id}`;
+            }}
+            className={`flex items-center justify-center gap-2 w-full py-2 rounded-xl gradient-accent text-white text-sm font-medium transition-all hover:opacity-90 active:scale-[0.97] ${
+              !sidebarOpen ? 'px-2' : 'px-3'
+            }`}
+          >
+            <Plus size={16} />
+            {sidebarOpen && <span>New Page</span>}
+          </Link>
+        </div>
+
+        {/* User info */}
+        {user && sidebarOpen && (
+          <div className="px-3 pb-3 flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <User size={14} className="text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-medium text-foreground truncate">
+                {user.user_metadata?.full_name || user.email?.split('@')[0]}
+              </div>
+              <div className="text-[10px] text-muted-foreground truncate">{user.email}</div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              title="Sign out"
+            >
+              <LogOut size={14} />
+            </button>
+          </div>
+        )}
       </div>
     </motion.aside>
   );
