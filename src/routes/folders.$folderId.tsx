@@ -43,6 +43,7 @@ interface Folder {
 interface Share {
   token: string;
   expires_at: string;
+  allow_upload: boolean;
 }
 
 function formatRemaining(expiresAt: string) {
