@@ -176,8 +176,7 @@ function ScreenShareTile({ share }: { share: ScreenShareTrackInfo }) {
           ref={videoRef}
           autoPlay
           playsInline
-          // @ts-expect-error — non-standard but required for legacy iOS inline
-          webkit-playsinline="true"
+          {...({ "webkit-playsinline": "true" } as Record<string, string>)}
           muted={muted}
           controls={false}
           className="w-full aspect-video bg-black object-contain"
