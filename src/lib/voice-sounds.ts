@@ -1,4 +1,4 @@
-// Synthesized join/leave sounds via WebAudio — no audio files required.
+// Synthesized join/leave/click sounds via WebAudio — no audio files required.
 // Discord-style: a quick rising 2-note chirp for join, a falling chirp for leave.
 
 let ctx: AudioContext | null = null;
@@ -15,7 +15,7 @@ function getCtx(): AudioContext | null {
   return ctx;
 }
 
-function playTone(freqs: number[], durationMs: number, volume = 0.18) {
+function playTone(freqs: number[], durationMs: number, volume = 0.18, type: OscillatorType = "sine") {
   const audio = getCtx();
   if (!audio) return;
 
@@ -30,7 +30,7 @@ function playTone(freqs: number[], durationMs: number, volume = 0.18) {
   gain.connect(audio.destination);
 
   const osc = audio.createOscillator();
-  osc.type = "sine";
+  osc.type = type;
   osc.frequency.setValueAtTime(freqs[0], now);
   for (let i = 1; i < freqs.length; i++) {
     osc.frequency.exponentialRampToValueAtTime(freqs[i], now + noteDur * i);
@@ -48,4 +48,14 @@ export function playJoinSound() {
 export function playLeaveSound() {
   // Falling two-note chirp: G5 -> C5
   playTone([783.99, 523.25], 260);
+}
+
+export function playMuteSound() {
+  // Subtle low click — descending blip
+  playTone([440, 220], 80, 0.12, "triangle");
+}
+
+export function playUnmuteSound() {
+  // Subtle higher click — ascending blip
+  playTone([330, 660], 80, 0.12, "triangle");
 }
