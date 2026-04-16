@@ -424,7 +424,7 @@ function VoicePage() {
                       return <div key={p.identity}>{withPopover}</div>;
                     })}
                   </div>
-                  {isCreator && lk.participants.some((p) => !p.isLocal) && (
+                  {isCreator && lk.participants.some((p: VoiceParticipantInfo) => !p.isLocal) && (
                     <p className="text-[10px] text-muted-foreground/60 mt-3">
                       Tip: right-click a participant to kick or ban them.
                     </p>
