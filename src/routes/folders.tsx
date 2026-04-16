@@ -532,7 +532,7 @@ function FoldersPage() {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden"
+                      className="overflow-hidden relative z-10"
                     >
                       <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-2">
                         <input
