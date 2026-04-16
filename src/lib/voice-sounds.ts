@@ -59,3 +59,30 @@ export function playUnmuteSound() {
   // Subtle higher click — ascending blip
   playTone([330, 660], 80, 0.12, "triangle");
 }
+
+/** Single short "ding" — non-intrusive in-app ring notification. */
+export function playRingChime() {
+  // Bright two-note bell
+  playTone([880, 1318.51], 280, 0.22, "sine");
+}
+
+// ---- Looping ringtone (used for full-screen incoming-call UI) ----
+let ringtoneTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startRingtone() {
+  if (ringtoneTimer) return;
+  // Classic phone-style: "ring ring ... ring ring" pattern
+  const burst = () => {
+    playTone([880, 1046.5], 320, 0.25, "sine");
+    setTimeout(() => playTone([880, 1046.5], 320, 0.25, "sine"), 420);
+  };
+  burst();
+  ringtoneTimer = setInterval(burst, 2200);
+}
+
+export function stopRingtone() {
+  if (ringtoneTimer) {
+    clearInterval(ringtoneTimer);
+    ringtoneTimer = null;
+  }
+}
