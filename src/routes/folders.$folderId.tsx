@@ -239,7 +239,7 @@ function FolderDetailPage() {
         {/* Share link panel */}
         {isOwner && (
           <div className="glass p-4 mb-6">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Link2 size={14} /> Public share link
               </h2>
@@ -250,48 +250,86 @@ function FolderDetailPage() {
               )}
             </div>
             {shareActive ? (
-              <div className="flex items-center gap-2">
-                <input
-                  readOnly
-                  value={shareUrl}
-                  className="flex-1 px-3 py-2 rounded-lg bg-muted/50 border border-border/30 text-sm outline-none font-mono text-xs"
-                />
-                <button
-                  onClick={copy}
-                  className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
-                  title="Copy"
-                >
-                  <Copy size={14} />
-                </button>
-                <button
-                  onClick={generateOrRegen}
-                  className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
-                  title="Regenerate"
-                >
-                  <RefreshCw size={14} />
-                </button>
-                <button
-                  onClick={stopSharing}
-                  className="p-2 rounded-lg hover:bg-destructive/10 text-destructive"
-                  title="Stop sharing"
-                  aria-label="Stop sharing folder"
-                >
-                  <Link2Off size={14} />
-                </button>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={shareUrl}
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-muted/50 border border-border/30 outline-none font-mono text-xs"
+                  />
+                  <button
+                    onClick={copy}
+                    className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground shrink-0"
+                    title="Copy"
+                    aria-label="Copy link"
+                  >
+                    <Copy size={14} />
+                  </button>
+                  <button
+                    onClick={stopSharing}
+                    className="p-2 rounded-lg hover:bg-destructive/10 text-destructive shrink-0"
+                    title="Stop sharing"
+                    aria-label="Stop sharing folder"
+                  >
+                    <Link2Off size={14} />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-muted-foreground">Regenerate with:</span>
+                  {EXPIRY_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => generateOrRegen(opt.value)}
+                      disabled={generating}
+                      className="px-2.5 py-1 rounded-md bg-muted/40 hover:bg-muted/70 text-xs text-foreground border border-border/30 disabled:opacity-50 transition-colors flex items-center gap-1"
+                      title={`New link expiring in ${opt.label.toLowerCase()}`}
+                    >
+                      <RefreshCw size={11} className="text-muted-foreground" />
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-sm text-muted-foreground flex-1 min-w-[200px]">
                   {share
                     ? "Link expired. Generate a new one."
-                    : "No active share link. Anyone with the link can view, download, and upload for 24 hours."}
+                    : "No active share link. Anyone with the link can view, download, and upload."}
                 </p>
-                <button
-                  onClick={generateOrRegen}
-                  className="px-4 py-2 rounded-lg gradient-accent text-white text-sm font-medium whitespace-nowrap"
-                >
-                  Generate link
-                </button>
+                <div className="flex items-center gap-0">
+                  <button
+                    onClick={() => generateOrRegen(expiry)}
+                    disabled={generating}
+                    className="px-4 py-2 rounded-l-lg gradient-accent text-white text-sm font-medium whitespace-nowrap disabled:opacity-60"
+                  >
+                    {generating ? "Generating…" : `Generate (${EXPIRY_OPTIONS.find(o => o.value === expiry)?.label})`}
+                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="px-2 py-2 rounded-r-lg gradient-accent text-white border-l border-white/20 disabled:opacity-60"
+                        aria-label="Choose expiry"
+                        disabled={generating}
+                      >
+                        <ChevronDown size={14} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {EXPIRY_OPTIONS.map((opt) => (
+                        <DropdownMenuItem
+                          key={opt.value}
+                          onClick={() => setExpiry(opt.value)}
+                        >
+                          Expires in {opt.label.toLowerCase()}
+                          {expiry === opt.value && (
+                            <span className="ml-auto text-primary">✓</span>
+                          )}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             )}
           </div>
