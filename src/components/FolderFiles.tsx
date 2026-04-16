@@ -528,67 +528,105 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
                 const thumb = thumbs[f.id];
                 const isImage = f.mime_type?.startsWith("image/");
                 return (
-                  <motion.div
-                    key={f.id}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    onClick={() => setPreviewFile(f)}
-                    className="glass p-3 flex items-center gap-3 group cursor-pointer hover:bg-muted/30 transition-colors"
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setPreviewFile(f);
-                      }
-                    }}
-                    aria-label={`Preview ${f.file_name}`}
-                  >
-                    {isImage && thumb ? (
-                      <img
-                        src={thumb}
-                        alt=""
-                        loading="lazy"
-                        className="w-10 h-10 rounded object-cover shrink-0"
-                        draggable={false}
-                      />
-                    ) : (
-                      <Icon size={20} className="text-primary shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground truncate">
-                        {f.file_name}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatBytes(f.size_bytes)} ·{" "}
-                        {new Date(f.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        download(f);
-                      }}
-                      className="p-2 rounded-lg hover:bg-primary/10 text-primary"
-                      title="Download"
-                      aria-label={`Download ${f.file_name}`}
-                    >
-                      <Download size={16} />
-                    </button>
-                    {canDelete && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          remove(f);
+                  <ContextMenu key={f.id}>
+                    <ContextMenuTrigger asChild>
+                      <motion.div
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        onClick={() => setPreviewFile(f)}
+                        className="glass p-3 flex items-center gap-3 group cursor-pointer hover:bg-muted/30 transition-colors"
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setPreviewFile(f);
+                          }
                         }}
-                        className="p-2 rounded-lg hover:bg-destructive/10 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Delete"
-                        aria-label={`Delete ${f.file_name}`}
+                        aria-label={`Preview ${f.file_name}`}
                       >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </motion.div>
+                        {isImage && thumb ? (
+                          <img
+                            src={thumb}
+                            alt=""
+                            loading="lazy"
+                            className="w-10 h-10 rounded object-cover shrink-0"
+                            draggable={false}
+                          />
+                        ) : (
+                          <Icon size={20} className="text-primary shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-foreground truncate">
+                            {f.file_name}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatBytes(f.size_bytes)} ·{" "}
+                            {new Date(f.created_at).toLocaleString()}
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            download(f);
+                          }}
+                          className="p-2 rounded-lg hover:bg-primary/10 text-primary"
+                          title="Download"
+                          aria-label={`Download ${f.file_name}`}
+                        >
+                          <Download size={16} />
+                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openRename(f);
+                            }}
+                            className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Rename"
+                            aria-label={`Rename ${f.file_name}`}
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              remove(f);
+                            }}
+                            className="p-2 rounded-lg hover:bg-destructive/10 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Delete"
+                            aria-label={`Delete ${f.file_name}`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </motion.div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="w-48">
+                      <ContextMenuItem onClick={() => setPreviewFile(f)}>
+                        <Eye size={14} className="mr-2" /> Open
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => download(f)}>
+                        <Download size={14} className="mr-2" /> Download
+                      </ContextMenuItem>
+                      {canDelete && (
+                        <ContextMenuItem onClick={() => openRename(f)}>
+                          <Pencil size={14} className="mr-2" /> Rename
+                        </ContextMenuItem>
+                      )}
+                      {canDelete && <ContextMenuSeparator />}
+                      {canDelete && (
+                        <ContextMenuItem
+                          onClick={() => remove(f)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 size={14} className="mr-2" /> Delete
+                        </ContextMenuItem>
+                      )}
+                    </ContextMenuContent>
+                  </ContextMenu>
                 );
               })}
             </div>
@@ -597,6 +635,34 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
       )}
 
       <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+
+      <Dialog open={!!renameTarget} onOpenChange={(o) => !o && setRenameTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename file</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitRename();
+              }
+            }}
+            placeholder="New name"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRenameTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={submitRename} disabled={renaming}>
+              {renaming ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
