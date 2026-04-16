@@ -31,13 +31,49 @@ export function AppLayout({ children }: { children: ReactNode }) {
     if (loading) return;
     let cancelled = false;
     setStoreReady(false);
-    setUserScope(user?.id ?? null).then(() => {
-      if (!cancelled) setStoreReady(true);
+    setUserScope(user?.id ?? null).then(async () => {
+      if (cancelled) return;
+      // After hydrating + syncing, prefill profile fields from the auth/profile
+      // record — but never overwrite values the user has set themselves.
+      if (user) {
+        const state = useAppStore.getState();
+        const current = state.settings;
+        const isPlaceholderName =
+          !current.userName || current.userName === 'User';
+        const isPlaceholderEmail =
+          !current.userEmail || current.userEmail === 'user@example.com';
+
+        if (isPlaceholderName || isPlaceholderEmail || !current.avatar) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('display_name, avatar_url')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          const updates: Partial<typeof current> = {};
+          if (isPlaceholderName) {
+            updates.userName =
+              profile?.display_name ||
+              user.email?.split('@')[0] ||
+              'User';
+          }
+          if (isPlaceholderEmail && user.email) {
+            updates.userEmail = user.email;
+          }
+          if (!current.avatar && profile?.avatar_url) {
+            updates.avatar = profile.avatar_url;
+          }
+          if (Object.keys(updates).length > 0) {
+            state.updateSettings(updates);
+          }
+        }
+      }
+      setStoreReady(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [loading, user?.id]);
+  }, [loading, user?.id, user?.email]);
 
   useEffect(() => {
     const root = document.documentElement;
