@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Upload, File as FileIcon, Image as ImageIcon, Video, Music,
-  FileText, Download, Trash2, Loader2, X,
+  FileText, Download, Trash2, Loader2, X, LayoutGrid, List as ListIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadResumable } from "@/lib/resumable-upload";
