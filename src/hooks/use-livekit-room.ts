@@ -344,11 +344,13 @@ export function useLiveKitRoom() {
     screenShares,
     isMuted,
     isSharing,
+    needsAudioUnlock,
     connect,
     disconnect,
     toggleMute,
     startScreenShare,
     stopScreenShare,
     setParticipantVolume,
+    unlockAudio,
   };
 }
