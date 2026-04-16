@@ -6,6 +6,7 @@ import {
   FileText, Download, Trash2, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadResumable } from "@/lib/resumable-upload";
 
 export interface FolderFile {
   id: string;
@@ -75,14 +76,25 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
       setUploads((u) => ({ ...u, [tmpKey]: 0 }));
       const safeName = file.name.replace(/[^\w.\-]/g, "_");
       const path = `${folderId}/${crypto.randomUUID()}-${safeName}`;
+      const RESUMABLE_THRESHOLD = 6 * 1024 * 1024; // 6 MB — standard upload caps around 50MB
 
       try {
-        // Use resumable for files > 6MB to handle very large uploads
-        const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
-          contentType: file.type || "application/octet-stream",
-          upsert: false,
-        });
-        if (upErr) throw upErr;
+        if (file.size > RESUMABLE_THRESHOLD) {
+          // TUS resumable upload — required for files larger than ~50MB.
+          await uploadResumable({
+            file,
+            path,
+            onProgress: (pct) =>
+              setUploads((u) => ({ ...u, [tmpKey]: pct })),
+          });
+        } else {
+          const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+            contentType: file.type || "application/octet-stream",
+            upsert: false,
+          });
+          if (upErr) throw upErr;
+          setUploads((u) => ({ ...u, [tmpKey]: 100 }));
+        }
 
         if (shareToken) {
           const { error: rpcErr } = await supabase.rpc("add_share_file", {
@@ -106,7 +118,6 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
           if (insErr) throw insErr;
         }
 
-        setUploads((u) => ({ ...u, [tmpKey]: 100 }));
         toast.success(`Uploaded ${file.name}`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Upload failed";
