@@ -278,7 +278,11 @@ function FoldersPage() {
                   transition={{ delay: i * 0.04 }}
                   className="glass p-4"
                 >
-                  <div className="flex items-center gap-3">
+                  <Link
+                    to="/folders/$folderId"
+                    params={{ folderId: folder.id }}
+                    className="flex items-center gap-3"
+                  >
                     <span className="text-2xl">{folder.icon}</span>
                     <div>
                       <div className="font-medium text-foreground">{folder.name}</div>
@@ -286,7 +290,7 @@ function FoldersPage() {
                         <Share2 size={10} /> Shared with you
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 </motion.div>
               ))}
             </div>
