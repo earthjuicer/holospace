@@ -75,6 +75,9 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
   });
   const inputRef = useRef<HTMLInputElement>(null);
   const autoOpenedRef = useRef(false);
+  const [renameTarget, setRenameTarget] = useState<FolderFile | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("folder-files-view", view);
