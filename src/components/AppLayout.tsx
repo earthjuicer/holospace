@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect } from 'react';
-import { useLocation } from '@tanstack/react-router';
+import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useAppStore } from '@/store/app-store';
 import { useAuth } from '@/hooks/use-auth';
 import { AppSidebar } from './AppSidebar';
@@ -16,6 +16,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { settings, sidebarOpen } = useAppStore();
   const { user, loading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isPublicRoute = PUBLIC_ROUTES.some((r) => location.pathname.startsWith(r));
 
@@ -33,6 +34,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
     root.style.fontSize =
       settings.fontSize === 'small' ? '14px' : settings.fontSize === 'large' ? '18px' : '16px';
   }, [settings.fontSize]);
+
+  // Redirect unauthenticated users to login
+  useEffect(() => {
+    if (!loading && !user && !isPublicRoute) {
+      navigate({ to: '/login' });
+    }
+  }, [loading, user, isPublicRoute, navigate]);
 
   // Show loading spinner while checking auth
   if (loading) {
@@ -53,10 +61,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Not logged in and not on a public route — redirect handled by showing login
-  if (!user && !isPublicRoute) {
-    // We'll let the route handle this, but for now show children
-    // The routes will redirect if needed
+  // Not logged in — show nothing while redirecting
+  if (!user) {
+    return (
+      <div className="flex h-[100dvh] w-full items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   return (
