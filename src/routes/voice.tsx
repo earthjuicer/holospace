@@ -70,6 +70,48 @@ function VoicePage() {
     });
   }, [isDeafened, lk.participants.length]);
 
+  // Push-to-talk: hold spacebar to talk while muted
+  useEffect(() => {
+    if (!lk.isConnected || !lk.room) return;
+
+    const isTypingTarget = (el: EventTarget | null) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        el.isContentEditable
+      );
+    };
+
+    const onDown = async (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      if (isTypingTarget(e.target)) return;
+      if (!lk.isMuted) return; // PTT only matters when muted
+      e.preventDefault();
+      if (pttHoldingRef.current) return;
+      pttHoldingRef.current = true;
+      setPttActive(true);
+      await lk.room?.localParticipant.setMicrophoneEnabled(true);
+    };
+
+    const onUp = async (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      if (!pttHoldingRef.current) return;
+      e.preventDefault();
+      pttHoldingRef.current = false;
+      setPttActive(false);
+      await lk.room?.localParticipant.setMicrophoneEnabled(false);
+    };
+
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+    };
+  }, [lk.isConnected, lk.isMuted, lk.room]);
+
   const joinChannel = async (channel: SidebarChannel) => {
     if (!user) return;
     if (channel.channel_type !== "voice") return;
