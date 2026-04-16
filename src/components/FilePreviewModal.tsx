@@ -34,7 +34,7 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 6;
 const ZOOM_STEP = 0.25;
 
-export function FilePreviewModal({ file, onClose }: Props) {
+export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
