@@ -437,6 +437,50 @@ export type Database = {
           },
         ]
       }
+      voice_rings: {
+        Row: {
+          caller_id: string
+          channel_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          message: string | null
+          recipient_id: string
+          responded_at: string | null
+          status: string
+        }
+        Insert: {
+          caller_id: string
+          channel_id: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          message?: string | null
+          recipient_id: string
+          responded_at?: string | null
+          status?: string
+        }
+        Update: {
+          caller_id?: string
+          channel_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          message?: string | null
+          recipient_id?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_rings_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "voice_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -527,6 +571,10 @@ export type Database = {
           invite_code: string
           invite_expires_at: string
         }[]
+      }
+      ring_channel: {
+        Args: { _channel_id: string; _message?: string }
+        Returns: number
       }
     }
     Enums: {
