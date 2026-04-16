@@ -267,6 +267,11 @@ function FolderDetailPage() {
                   <Clock size={12} /> {formatRemaining(share!.expires_at)}
                 </span>
               )}
+              {shareExpired && (
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-destructive flex items-center gap-1 px-2 py-0.5 rounded-full bg-destructive/10 border border-destructive/30">
+                  <AlertTriangle size={11} /> Expired
+                </span>
+              )}
             </div>
             {shareActive ? (
               <div className="space-y-2">
