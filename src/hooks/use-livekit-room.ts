@@ -41,6 +41,10 @@ export function useLiveKitRoom() {
   const [screenShares, setScreenShares] = useState<ScreenShareTrackInfo[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  // Mobile browsers (especially iOS Safari) often block autoplay until the
+  // user taps after the track is attached. UI can show a "Tap to enable audio"
+  // prompt + call unlockAudio() from a click handler.
+  const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
   const roomRef = useRef<Room | null>(null);
 
   const refreshParticipants = useCallback((r: Room) => {
