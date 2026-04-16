@@ -275,14 +275,16 @@ function VoicePage() {
                 />
                 <button
                   onClick={handleToggleMute}
-                  className={`p-2.5 rounded-xl transition-all ${
-                    lk.isMuted
+                  className={`p-2.5 rounded-xl transition-all relative ${
+                    pttActive
+                      ? "bg-primary/20 text-primary ring-2 ring-primary"
+                      : lk.isMuted
                       ? "bg-destructive/20 text-destructive"
                       : "bg-muted/50 text-foreground hover:bg-muted"
                   }`}
-                  title={lk.isMuted ? "Unmute" : "Mute"}
+                  title={lk.isMuted ? "Unmute (or hold Space to talk)" : "Mute"}
                 >
-                  {lk.isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+                  {pttActive || !lk.isMuted ? <Mic size={18} /> : <MicOff size={18} />}
                 </button>
                 <button
                   onClick={() => setIsDeafened(!isDeafened)}
