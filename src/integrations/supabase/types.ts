@@ -113,6 +113,7 @@ export type Database = {
       }
       folder_public_shares: {
         Row: {
+          allow_upload: boolean
           created_at: string
           expires_at: string
           folder_id: string
@@ -120,6 +121,7 @@ export type Database = {
           token: string
         }
         Insert: {
+          allow_upload?: boolean
           created_at?: string
           expires_at?: string
           folder_id: string
@@ -127,6 +129,7 @@ export type Database = {
           token?: string
         }
         Update: {
+          allow_upload?: boolean
           created_at?: string
           expires_at?: string
           folder_id?: string
@@ -648,6 +651,10 @@ export type Database = {
         Args: { _folder_id: string }
         Returns: boolean
       }
+      folder_share_allows_upload: {
+        Args: { _folder_id: string }
+        Returns: boolean
+      }
       get_channel_invite_code: {
         Args: { _channel_id: string }
         Returns: string
@@ -655,6 +662,7 @@ export type Database = {
       get_share_folder: {
         Args: { _token: string }
         Returns: {
+          allow_upload: boolean
           expires_at: string
           folder_icon: string
           folder_id: string
@@ -719,21 +727,18 @@ export type Database = {
           username: string
         }[]
       }
-      regen_share_token:
-        | {
-            Args: { _folder_id: string }
-            Returns: {
-              expires_at: string
-              token: string
-            }[]
-          }
-        | {
-            Args: { _expires_in?: string; _folder_id: string }
-            Returns: {
-              expires_at: string
-              token: string
-            }[]
-          }
+      regen_share_token: {
+        Args: {
+          _allow_upload?: boolean
+          _expires_in?: string
+          _folder_id: string
+        }
+        Returns: {
+          allow_upload: boolean
+          expires_at: string
+          token: string
+        }[]
+      }
       regen_voice_invite: {
         Args: { _channel_id: string }
         Returns: {
@@ -744,6 +749,10 @@ export type Database = {
       ring_channel: {
         Args: { _channel_id: string; _message?: string }
         Returns: number
+      }
+      set_share_allow_upload: {
+        Args: { _allow_upload: boolean; _folder_id: string }
+        Returns: boolean
       }
     }
     Enums: {
