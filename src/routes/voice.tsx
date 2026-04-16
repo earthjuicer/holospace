@@ -303,13 +303,15 @@ function VoicePage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => copyInviteLink(channel, e)}
-                      className="p-2 rounded-lg bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-                      title="Copy invite link"
-                    >
-                      {copiedId === channel.id ? <Check size={16} /> : <Link2 size={16} />}
-                    </button>
+                    {channel.created_by === user?.id && (
+                      <button
+                        onClick={(e) => copyInviteLink(channel, e)}
+                        className="p-2 rounded-lg bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+                        title="Copy invite link"
+                      >
+                        {copiedId === channel.id ? <Check size={16} /> : <Link2 size={16} />}
+                      </button>
+                    )}
                     {isActive && (
                       <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-500 text-xs font-medium">
                         Connected
@@ -346,9 +348,11 @@ function VoicePage() {
                         +{channelParticipants.length - 6} more
                       </span>
                     )}
-                    <code className="ml-auto text-[10px] text-muted-foreground/60 font-mono">
-                      #{channel.invite_code}
-                    </code>
+                    {channel.created_by === user?.id && channel.invite_code && (
+                      <code className="ml-auto text-[10px] text-muted-foreground/60 font-mono">
+                        #{channel.invite_code}
+                      </code>
+                    )}
                   </div>
                 )}
               </motion.div>
