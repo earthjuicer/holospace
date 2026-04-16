@@ -209,7 +209,7 @@ function FolderDetailPage() {
           </div>
         )}
 
-        <FolderFiles folderId={folderId} canDelete={isOwner} />
+        <FolderFiles folderId={folderId} canDelete={isOwner} autoOpenUpload={upload === 1} />
       </motion.div>
     </div>
   );
