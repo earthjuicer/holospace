@@ -152,10 +152,7 @@ function VoiceInvitePage() {
         .on(RoomEvent.ParticipantDisconnected, () => refreshParticipants(room))
         .on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
           if (track.kind === Track.Kind.Audio) {
-            const el = (track as RemoteAudioTrack).attach();
-            el.setAttribute("data-lk-audio", "1");
-            el.style.display = "none";
-            document.body.appendChild(el);
+            attachRemoteAudio(track as RemoteAudioTrack);
           }
           refreshParticipants(room);
         })
@@ -164,6 +161,10 @@ function VoiceInvitePage() {
             (track as RemoteAudioTrack).detach().forEach((el) => el.remove());
           }
           refreshParticipants(room);
+        })
+        .on(RoomEvent.AudioPlaybackStatusChanged, () => {
+          // True when the browser has granted us permission to play audio.
+          setNeedsAudioUnlock(!room.canPlaybackAudio);
         })
         .on(RoomEvent.TrackMuted, () => refreshParticipants(room))
         .on(RoomEvent.TrackUnmuted, () => refreshParticipants(room))
