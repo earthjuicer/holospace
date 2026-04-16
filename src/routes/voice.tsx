@@ -53,6 +53,7 @@ function VoicePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const screenShare = useScreenShare();
 
   useEffect(() => {
     fetchChannels();
