@@ -13,9 +13,13 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, model } = await req.json();
+    const { messages, model, system } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+
+    const finalMessages = system
+      ? [{ role: "system", content: system }, ...messages]
+      : messages;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -27,7 +31,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: model || "google/gemini-3-flash-preview",
-          messages,
+          messages: finalMessages,
           stream: true,
         }),
       },
@@ -61,7 +65,8 @@ serve(async (req) => {
     console.error("run-prompt error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });
