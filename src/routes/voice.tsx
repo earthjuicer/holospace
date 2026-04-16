@@ -60,6 +60,8 @@ function VoicePage() {
     p: VoiceParticipantInfo;
     ban: boolean;
   } | null>(null);
+  // Per-participant volume slider state (0-100). Defaults to 100 = unity gain.
+  const [volumes, setVolumes] = useState<Record<string, number>>({});
   const lastChannelRef = useRef<string | null>(null);
   const pttHoldingRef = useRef(false);
 
