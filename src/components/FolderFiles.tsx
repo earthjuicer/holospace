@@ -4,10 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Upload, File as FileIcon, Image as ImageIcon, Video, Music,
   FileText, Download, Trash2, Loader2, X, LayoutGrid, List as ListIcon,
+  Eye, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadResumable } from "@/lib/resumable-upload";
 import { FilePreviewModal, type PreviewFile } from "./FilePreviewModal";
+import {
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface InFlightUpload {
   id: string;
