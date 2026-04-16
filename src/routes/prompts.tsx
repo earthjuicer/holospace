@@ -379,10 +379,12 @@ function PromptsPage() {
 
   const variables = selected ? extractVariables(selected.content) : [];
 
+  const showDetail = !!(selected || editing);
+
   return (
     <div className="flex h-full overflow-hidden">
       {/* List */}
-      <div className="w-80 shrink-0 border-r border-border/40 flex flex-col bg-background/40">
+      <div className={`${showDetail ? 'hidden md:flex' : 'flex'} w-full md:w-80 shrink-0 border-r border-border/40 flex-col bg-background/40`}>
         <div className="p-4 border-b border-border/40 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -477,7 +479,16 @@ function PromptsPage() {
       </div>
 
       {/* Detail */}
-      <div className="flex-1 overflow-y-auto">
+      <div className={`${showDetail ? 'flex' : 'hidden md:flex'} flex-1 overflow-y-auto flex-col`}>
+        {/* Mobile back button */}
+        {showDetail && (
+          <button
+            onClick={() => { setSelected(null); setEditing(null); }}
+            className="md:hidden flex items-center gap-1.5 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground border-b border-border/30 shrink-0"
+          >
+            ← Back to prompts
+          </button>
+        )}
         <AnimatePresence mode="wait">
           {editing ? (
             <motion.div
