@@ -100,8 +100,8 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
             storage_path: path,
             file_name: file.name,
             size_bytes: file.size,
-            mime_type: file.type || null,
-            uploaded_by: user?.id ?? null,
+            mime_type: file.type || undefined,
+            uploaded_by: user?.id ?? undefined,
           });
           if (insErr) throw insErr;
         }
