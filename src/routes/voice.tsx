@@ -187,11 +187,21 @@ function VoicePage() {
       await supabase.removeChannel(presenceChannelRef.current);
       presenceChannelRef.current = null;
     }
+    if (screenShare.isSharing) screenShare.stopShare();
     setActiveChannel(null);
     setIsMuted(false);
     setIsDeafened(false);
     playLeaveSound();
     toast("Left voice channel");
+  };
+
+  const toggleMute = () => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      if (next) playMuteSound();
+      else playUnmuteSound();
+      return next;
+    });
   };
 
   // Update mute state in presence
