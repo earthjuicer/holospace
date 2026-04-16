@@ -124,16 +124,25 @@ function FolderDetailPage() {
   const shareActive = share && new Date(share.expires_at).getTime() > Date.now();
   const shareUrl = share ? `${window.location.origin}/share/${share.token}` : "";
 
-  const generateOrRegen = async () => {
+  const generateOrRegen = async (value: ExpiryValue = expiry) => {
+    const opt = EXPIRY_OPTIONS.find((o) => o.value === value) ?? EXPIRY_OPTIONS[1];
+    setGenerating(true);
     const { data, error } = await supabase.rpc("regen_share_token", {
       _folder_id: folderId,
+      _expires_in: opt.interval,
     });
+    setGenerating(false);
     if (error || !data?.[0]) {
       toast.error(error?.message || "Failed to generate link");
       return;
     }
     setShare({ token: data[0].token, expires_at: data[0].expires_at });
-    toast.success("New share link generated");
+    setExpiry(value);
+    toast.success(
+      value === "never"
+        ? "Share link generated — never expires"
+        : `New share link · expires in ${opt.label.toLowerCase()}`
+    );
   };
 
   // Revoke the public share immediately by deleting the row. The /share/:token
