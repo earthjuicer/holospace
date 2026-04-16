@@ -373,6 +373,7 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
+            onWheel={onWheel}
           >
             {/* Prev / Next navigation */}
             {prev && (
