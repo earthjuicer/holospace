@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ZoomIn, ZoomOut, RotateCcw, Download, Loader2, Share2, Copy, Check } from "lucide-react";
+import { X, ZoomIn, ZoomOut, RotateCcw, Download, Loader2, Share2, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,17 +23,28 @@ export interface PreviewFile {
 interface Props {
   file: PreviewFile | null;
   onClose: () => void;
+  /** Optional: full list of files in the folder, enables prev/next + swipe navigation. */
+  siblings?: PreviewFile[];
+  /** Called when the user navigates to a sibling via arrows / keyboard / swipe. */
+  onNavigate?: (next: PreviewFile) => void;
 }
 
 const BUCKET = "folder-files";
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 6;
 const ZOOM_STEP = 0.25;
+// Minimum horizontal pixels for a swipe to count as a navigation gesture.
+const SWIPE_THRESHOLD = 60;
+// Max time (ms) for the gesture to count — prevents slow drags from triggering nav.
+const SWIPE_MAX_MS = 600;
 
-export function FilePreviewModal({ file, onClose }: Props) {
+export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [copied, setCopied] = useState(false);
+  // Visual feedback while swiping (shifts the media + dims the off-screen direction).
+  const [swipeDx, setSwipeDx] = useState(0);
 
   useEffect(() => {
     if (!file) {
@@ -62,7 +73,79 @@ export function FilePreviewModal({ file, onClose }: Props) {
     };
   }, [file, onClose]);
 
-  // Close on Escape, zoom on +/-
+  // Compute previous/next siblings (if a list was provided).
+  const { prev, next, indexLabel } = useMemo(() => {
+    if (!file || !siblings || siblings.length < 2) {
+      return { prev: null as PreviewFile | null, next: null as PreviewFile | null, indexLabel: "" };
+    }
+    const idx = siblings.findIndex((s) => s.id === file.id);
+    if (idx === -1) {
+      return { prev: null as PreviewFile | null, next: null as PreviewFile | null, indexLabel: "" };
+    }
+    return {
+      prev: idx > 0 ? siblings[idx - 1] : null,
+      next: idx < siblings.length - 1 ? siblings[idx + 1] : null,
+      indexLabel: `${idx + 1} / ${siblings.length}`,
+    };
+  }, [file, siblings]);
+
+  const goPrev = () => {
+    if (prev && onNavigate) onNavigate(prev);
+  };
+  const goNext = () => {
+    if (next && onNavigate) onNavigate(next);
+  };
+
+  // Touch swipe gestures (mobile). Horizontal swipe > threshold navigates;
+  // vertical-dominant swipes are ignored so page scroll/pinch still works.
+  // We track on the content wrapper, but cancel if the gesture starts inside
+  // a video/audio element so native media controls keep working.
+  const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) {
+      touchStart.current = null;
+      setSwipeDx(0);
+      return;
+    }
+    // Don't intercept swipes on interactive media controls.
+    const target = e.target as HTMLElement;
+    if (target.closest("video, audio, button, a, input, [data-no-swipe]")) {
+      touchStart.current = null;
+      return;
+    }
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    if (!start || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Only show drag feedback once horizontal motion clearly dominates.
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      // Resist swipes when there is no neighbour in that direction.
+      const blocked = (dx > 0 && !prev) || (dx < 0 && !next);
+      setSwipeDx(blocked ? dx * 0.2 : dx);
+    }
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    setSwipeDx(0);
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    const dt = Date.now() - start.t;
+    if (dt > SWIPE_MAX_MS) return;
+    if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+    if (Math.abs(dy) > Math.abs(dx) * 0.6) return;
+    if (dx < 0) goNext();
+    else goPrev();
+  };
+
+  // Close on Escape, zoom on +/-, navigate with arrow keys.
   useEffect(() => {
     if (!file) return;
     const onKey = (e: KeyboardEvent) => {
@@ -70,12 +153,12 @@ export function FilePreviewModal({ file, onClose }: Props) {
       if (e.key === "+" || e.key === "=") setZoom((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP));
       if (e.key === "-" || e.key === "_") setZoom((z) => Math.max(MIN_ZOOM, z - ZOOM_STEP));
       if (e.key === "0") setZoom(1);
+      if (e.key === "ArrowLeft" && prev && onNavigate) onNavigate(prev);
+      if (e.key === "ArrowRight" && next && onNavigate) onNavigate(next);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [file, onClose]);
-
-  const [copied, setCopied] = useState(false);
+  }, [file, onClose, prev, next, onNavigate]);
 
   const download = async () => {
     if (!file || !url) return;
@@ -128,6 +211,11 @@ export function FilePreviewModal({ file, onClose }: Props) {
   const isText = mime.startsWith("text/");
   const canZoom = isImage || isPdf;
 
+  // Animate the media follow-the-finger while swiping; snap back on release.
+  const swipeStyle: React.CSSProperties = swipeDx
+    ? { transform: `translateX(${swipeDx}px)`, transition: "none" }
+    : { transform: "translateX(0)", transition: "transform 0.2s ease-out" };
+
   return (
     <AnimatePresence>
       {file && (
@@ -151,6 +239,7 @@ export function FilePreviewModal({ file, onClose }: Props) {
               <div className="text-[11px] text-muted-foreground">
                 {file.mime_type ?? "Unknown type"}
                 {canZoom && ` · ${Math.round(zoom * 100)}%`}
+                {indexLabel && ` · ${indexLabel}`}
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -235,12 +324,44 @@ export function FilePreviewModal({ file, onClose }: Props) {
 
           {/* Content */}
           <div
-            className="flex-1 overflow-auto flex items-center justify-center p-4"
+            className="flex-1 overflow-auto flex items-center justify-center p-4 relative touch-pan-y"
             onClick={(e) => {
               // Click on backdrop (not on media) closes
               if (e.target === e.currentTarget) onClose();
             }}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
           >
+            {/* Prev / Next navigation */}
+            {prev && (
+              <button
+                data-no-swipe
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goPrev();
+                }}
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-background/80 hover:bg-background border border-border/40 text-foreground shadow-lg backdrop-blur transition-colors"
+                title="Previous (←)"
+                aria-label="Previous file"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
+            {next && (
+              <button
+                data-no-swipe
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goNext();
+                }}
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-background/80 hover:bg-background border border-border/40 text-foreground shadow-lg backdrop-blur transition-colors"
+                title="Next (→)"
+                aria-label="Next file"
+              >
+                <ChevronRight size={20} />
+              </button>
+            )}
             {loading || !url ? (
               <Loader2 className="animate-spin text-primary" size={32} />
             ) : isImage ? (
@@ -249,9 +370,9 @@ export function FilePreviewModal({ file, onClose }: Props) {
                 alt={file.file_name}
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                  transform: `scale(${zoom})`,
+                  ...swipeStyle,
+                  transform: `${swipeStyle.transform ?? ""} scale(${zoom})`,
                   transformOrigin: "center center",
-                  transition: "transform 0.15s ease-out",
                 }}
                 className="max-w-full max-h-full object-contain select-none"
                 draggable={false}
