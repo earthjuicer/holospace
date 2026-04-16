@@ -27,6 +27,7 @@ import { Slider } from "@/components/ui/slider";
 export const Route = createFileRoute("/voice")({
   validateSearch: (search: Record<string, unknown>) => ({
     join: (search.join as string) || undefined,
+    channelId: (search.channelId as string) || undefined,
   }),
   head: () => ({
     meta: [
@@ -48,7 +49,7 @@ function formatRemaining(expiresAt: string) {
 function VoicePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { join: joinCode } = Route.useSearch();
+  const { join: joinCode, channelId: pendingChannelId } = Route.useSearch();
   const [activeChannel, setActiveChannel] = useState<SidebarChannel | null>(null);
   const [isDeafened, setIsDeafened] = useState(false);
   const [pttActive, setPttActive] = useState(false);
@@ -96,6 +97,24 @@ function VoicePage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [joinCode, user]);
+
+  // Auto-join when we land on /voice?channelId=… (e.g. clicked a voice
+  // channel from inside a text channel via the sidebar).
+  useEffect(() => {
+    if (!pendingChannelId || !user || activeChannel) return;
+    (async () => {
+      const { data: ch } = await supabase
+        .from("voice_channels")
+        .select("id, name, channel_type, category_id, created_by, position")
+        .eq("id", pendingChannelId)
+        .maybeSingle();
+      if (ch && (ch as any).channel_type === "voice") {
+        joinChannel(ch as unknown as SidebarChannel);
+      }
+      navigate({ to: "/voice", search: {} as any, replace: true });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingChannelId, user]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
