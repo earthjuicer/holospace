@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/context-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
+import { MicLevelMeter } from "@/components/MicLevelMeter";
+import { useLongPress } from "@/hooks/use-long-press";
 
 export const Route = createFileRoute("/voice")({
   validateSearch: (search: Record<string, unknown>) => ({
