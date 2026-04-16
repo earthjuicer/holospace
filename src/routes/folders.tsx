@@ -447,7 +447,7 @@ function FoldersPage() {
                       </div>
                     </div>
                   </Link>
-                  <div className="flex items-center gap-1 shrink-0 opacity-100">
+                  <div className="relative z-10 flex items-center gap-1 shrink-0 opacity-100">
                     <input
                       type="file"
                       multiple
