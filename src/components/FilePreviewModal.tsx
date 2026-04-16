@@ -180,6 +180,7 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
               <div className="text-[11px] text-muted-foreground">
                 {file.mime_type ?? "Unknown type"}
                 {canZoom && ` · ${Math.round(zoom * 100)}%`}
+                {indexLabel && ` · ${indexLabel}`}
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
