@@ -10,9 +10,22 @@ import {
   type RemoteTrack,
   type RemoteAudioTrack,
 } from "livekit-client";
-import { Mic, MicOff, Headphones, PhoneOff, Users, Volume2, LogIn, Sparkles } from "lucide-react";
+import {
+  Mic,
+  MicOff,
+  Headphones,
+  PhoneOff,
+  Users,
+  Volume2,
+  LogIn,
+  Sparkles,
+  Monitor,
+  MonitorOff,
+} from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { getLiveKitTokenForGuest } from "@/utils/livekit-guest.functions";
+import { ScreenShareViewer } from "@/components/ScreenShareViewer";
+import type { ScreenShareTrackInfo } from "@/hooks/use-livekit-room";
 import {
   playJoinSound,
   playLeaveSound,
@@ -33,6 +46,7 @@ interface ParticipantInfo {
   isMuted: boolean;
   isSpeaking: boolean;
   isGuest: boolean;
+  isScreenSharing: boolean;
 }
 
 function VoiceInvitePage() {
@@ -41,8 +55,10 @@ function VoiceInvitePage() {
   const [name, setName] = useState("");
   const [channelName, setChannelName] = useState<string>("");
   const [participants, setParticipants] = useState<ParticipantInfo[]>([]);
+  const [screenShares, setScreenShares] = useState<ScreenShareTrackInfo[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   // iOS Safari + some Android browsers block audio autoplay until a user
   // gesture happens AFTER the track is attached. We surface a tap prompt.
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
@@ -52,12 +68,14 @@ function VoiceInvitePage() {
     const list: ParticipantInfo[] = [];
     const collect = (p: Participant) => {
       const micPub = p.getTrackPublication(Track.Source.Microphone);
+      const screenPub = p.getTrackPublication(Track.Source.ScreenShare);
       list.push({
         identity: p.identity,
         name: p.name || p.identity,
         isMuted: micPub ? micPub.isMuted : true,
         isSpeaking: p.isSpeaking,
         isGuest: p.identity.startsWith("guest-"),
+        isScreenSharing: !!screenPub && !screenPub.isMuted,
       });
     };
     collect(r.localParticipant);
@@ -65,12 +83,31 @@ function VoiceInvitePage() {
     setParticipants(list);
   }, []);
 
+  // Build the list of active screen-share tracks (video + optional system
+  // audio) from every participant. The ScreenShareViewer renders these via
+  // the same component used by signed-in users so guests see screen shares
+  // with full quality, fullscreen toggle, and audio.
+  const refreshScreenShares = useCallback((r: Room) => {
+    const list: ScreenShareTrackInfo[] = [];
+    const addShare = (p: Participant) => {
+      const videoPub = p.getTrackPublication(Track.Source.ScreenShare);
+      const audioPub = p.getTrackPublication(Track.Source.ScreenShareAudio);
+      const videoTrack = videoPub?.track?.mediaStreamTrack;
+      if (videoPub && !videoPub.isMuted && videoTrack) {
+        list.push({
+          participantId: p.identity,
+          participantName: p.name || p.identity,
+          videoTrack,
+          audioTrack: audioPub?.track?.mediaStreamTrack,
+        });
+      }
+    };
+    addShare(r.localParticipant);
+    r.remoteParticipants.forEach(addShare);
+    setScreenShares(list);
+  }, []);
+
   // Attach a remote audio track in a way that mobile browsers will actually play.
-  // - `playsinline` is required on iOS or playback is silently blocked.
-  // - `autoplay` + explicit `play()` covers Android Chrome quirks.
-  // - We keep the element in the DOM (not display:none on iOS — Safari has
-  //   historically refused to play hidden <audio>; using visibility:hidden +
-  //   zero size is safer).
   const attachRemoteAudio = useCallback((track: RemoteAudioTrack) => {
     const el = track.attach() as HTMLAudioElement;
     el.setAttribute("data-lk-audio", "1");
@@ -85,7 +122,6 @@ function VoiceInvitePage() {
     el.style.pointerEvents = "none";
     document.body.appendChild(el);
     el.play().catch(() => {
-      // Autoplay was blocked — show the unlock UI so the user can tap.
       setNeedsAudioUnlock(true);
     });
   }, []);
@@ -110,11 +146,14 @@ function VoiceInvitePage() {
     };
   }, []);
 
+  // Deafen mutes both voice audio elements AND any system-audio MediaStreams
+  // attached to the screen-share videos (the viewer marks them with
+  // data-lk-audio so we can target them uniformly).
   useEffect(() => {
     document.querySelectorAll<HTMLAudioElement>("audio[data-lk-audio]").forEach((el) => {
       el.muted = isDeafened;
     });
-  }, [isDeafened, participants.length]);
+  }, [isDeafened, participants.length, screenShares.length]);
 
   const join = async () => {
     if (!name.trim()) {
@@ -141,33 +180,65 @@ function VoiceInvitePage() {
           else if (state === ConnectionState.Disconnected) toast.dismiss(id);
         })
         .on(RoomEvent.Disconnected, (reason) => {
-          // Likely kicked
           if (reason !== undefined) {
             toast.error("You were removed from the channel");
             setStage("name");
             roomRef.current = null;
           }
         })
-        .on(RoomEvent.ParticipantConnected, () => refreshParticipants(room))
-        .on(RoomEvent.ParticipantDisconnected, () => refreshParticipants(room))
+        .on(RoomEvent.ParticipantConnected, () => {
+          refreshParticipants(room);
+          refreshScreenShares(room);
+        })
+        .on(RoomEvent.ParticipantDisconnected, () => {
+          refreshParticipants(room);
+          refreshScreenShares(room);
+        })
         .on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
           if (track.kind === Track.Kind.Audio) {
+            // Attach voice audio AND screen-share system audio to hidden
+            // <audio> elements so they actually play. (Screen-share video
+            // tracks are rendered by ScreenShareViewer, not attached here.)
             attachRemoteAudio(track as RemoteAudioTrack);
           }
           refreshParticipants(room);
+          refreshScreenShares(room);
         })
         .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
           if (track.kind === Track.Kind.Audio) {
             (track as RemoteAudioTrack).detach().forEach((el) => el.remove());
           }
           refreshParticipants(room);
+          refreshScreenShares(room);
+        })
+        .on(RoomEvent.TrackPublished, () => refreshScreenShares(room))
+        .on(RoomEvent.TrackUnpublished, () => refreshScreenShares(room))
+        .on(RoomEvent.LocalTrackPublished, () => {
+          refreshParticipants(room);
+          refreshScreenShares(room);
+          // Local screen-share state can change asynchronously when the user
+          // ends the share from the browser's native picker UI.
+          const screenPub = room.localParticipant.getTrackPublication(
+            Track.Source.ScreenShare
+          );
+          setIsSharing(!!screenPub && !screenPub.isMuted);
+        })
+        .on(RoomEvent.LocalTrackUnpublished, () => {
+          refreshParticipants(room);
+          refreshScreenShares(room);
+          setIsSharing(false);
         })
         .on(RoomEvent.AudioPlaybackStatusChanged, () => {
-          // True when the browser has granted us permission to play audio.
           setNeedsAudioUnlock(!room.canPlaybackAudio);
         })
-        .on(RoomEvent.TrackMuted, () => refreshParticipants(room))
-        .on(RoomEvent.TrackUnmuted, () => refreshParticipants(room))
+        .on(RoomEvent.TrackMuted, () => {
+          refreshParticipants(room);
+          refreshScreenShares(room);
+        })
+        .on(RoomEvent.TrackUnmuted, () => {
+          refreshParticipants(room);
+          refreshScreenShares(room);
+        })
         .on(RoomEvent.ActiveSpeakersChanged, () => refreshParticipants(room));
 
       await room.connect(url, token);
@@ -179,7 +250,7 @@ function VoiceInvitePage() {
       }
       roomRef.current = room;
       refreshParticipants(room);
-      // If the browser already blocked autoplay, surface the unlock prompt.
+      refreshScreenShares(room);
       if (!room.canPlaybackAudio) setNeedsAudioUnlock(true);
       playJoinSound();
       setStage("in-room");
@@ -194,6 +265,8 @@ function VoiceInvitePage() {
     document.querySelectorAll("audio[data-lk-audio]").forEach((el) => el.remove());
     roomRef.current = null;
     setParticipants([]);
+    setScreenShares([]);
+    setIsSharing(false);
     playLeaveSound();
     setStage("name");
   };
@@ -206,6 +279,34 @@ function VoiceInvitePage() {
     setIsMuted(next);
     if (next) playMuteSound();
     else playUnmuteSound();
+  };
+
+  // Guests can publish their own screen share. Mobile browsers (iOS Safari
+  // especially) don't support getDisplayMedia — surface a clear error rather
+  // than a silent failure.
+  const toggleScreenShare = async () => {
+    const r = roomRef.current;
+    if (!r) return;
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      toast.error("Screen sharing isn't supported on this device");
+      return;
+    }
+    try {
+      if (isSharing) {
+        await r.localParticipant.setScreenShareEnabled(false);
+        setIsSharing(false);
+      } else {
+        await r.localParticipant.setScreenShareEnabled(true, { audio: true });
+        setIsSharing(true);
+      }
+      refreshScreenShares(r);
+    } catch (err: any) {
+      // User cancelled the picker — not an error worth surfacing.
+      if (err?.name !== "NotAllowedError") {
+        toast.error(err?.message || "Couldn't start screen share");
+      }
+      setIsSharing(false);
+    }
   };
 
   return (
@@ -288,7 +389,7 @@ function VoiceInvitePage() {
               key="room"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="max-w-2xl w-full"
+              className="max-w-4xl w-full"
             >
               <div className="flex items-center gap-2 mb-6">
                 <Volume2 size={22} className="text-primary" />
@@ -307,6 +408,10 @@ function VoiceInvitePage() {
                   Tap to enable audio
                 </button>
               )}
+
+              {/* Same screen-share viewer used by signed-in users — renders
+                  every active screen share with fullscreen + audio controls. */}
+              <ScreenShareViewer shares={screenShares} />
 
               <div className="glass p-4">
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
@@ -327,6 +432,11 @@ function VoiceInvitePage() {
                         {p.isMuted && (
                           <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive flex items-center justify-center ring-2 ring-background">
                             <MicOff size={9} className="text-white" />
+                          </div>
+                        )}
+                        {p.isScreenSharing && (
+                          <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center ring-2 ring-background">
+                            <Monitor size={9} className="text-white" />
                           </div>
                         )}
                       </div>
@@ -381,6 +491,17 @@ function VoiceInvitePage() {
                 title={isDeafened ? "Undeafen" : "Deafen"}
               >
                 <Headphones size={18} />
+              </button>
+              <button
+                onClick={toggleScreenShare}
+                className={`p-2.5 rounded-xl transition-all ${
+                  isSharing
+                    ? "bg-primary/20 text-primary"
+                    : "bg-muted/50 text-foreground hover:bg-muted"
+                }`}
+                title={isSharing ? "Stop sharing" : "Share your screen"}
+              >
+                {isSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
               </button>
               <button
                 onClick={leave}
