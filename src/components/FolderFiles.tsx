@@ -426,73 +426,98 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
                 const thumb = thumbs[f.id];
                 const isImage = f.mime_type?.startsWith("image/");
                 return (
-                  <motion.div
-                    key={f.id}
-                    initial={{ opacity: 0, scale: 0.96 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    onClick={() => setPreviewFile(f)}
-                    className="glass p-2 group cursor-pointer hover:bg-muted/30 hover:ring-1 hover:ring-primary/40 transition-all relative"
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setPreviewFile(f);
-                      }
-                    }}
-                    aria-label={`Open ${f.file_name}`}
-                  >
-                    <div className="aspect-square rounded-md bg-muted/40 flex items-center justify-center overflow-hidden mb-2">
-                      {isImage && thumb ? (
-                        <img
-                          src={thumb}
-                          alt={f.file_name}
-                          loading="lazy"
-                          className="w-full h-full object-cover"
-                          draggable={false}
-                        />
-                      ) : (
-                        <Icon size={32} className="text-primary/70" />
-                      )}
-                    </div>
-                    <div
-                      className="text-xs font-medium text-foreground line-clamp-2 leading-tight"
-                      title={f.file_name}
-                    >
-                      {f.file_name}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      {formatBytes(f.size_bytes)}
-                    </div>
-
-                    {/* Hover actions */}
-                    <div className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          download(f);
+                  <ContextMenu key={f.id}>
+                    <ContextMenuTrigger asChild>
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.96 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        onClick={() => setPreviewFile(f)}
+                        className="glass p-2 group cursor-pointer hover:bg-muted/30 hover:ring-1 hover:ring-primary/40 transition-all relative"
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setPreviewFile(f);
+                          }
                         }}
-                        className="p-1.5 rounded-md bg-background/90 backdrop-blur hover:bg-primary/10 text-primary shadow-sm"
-                        title="Download"
-                        aria-label={`Download ${f.file_name}`}
+                        aria-label={`Open ${f.file_name}`}
                       >
-                        <Download size={12} />
-                      </button>
-                      {canDelete && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            remove(f);
-                          }}
-                          className="p-1.5 rounded-md bg-background/90 backdrop-blur hover:bg-destructive/10 text-destructive shadow-sm"
-                          title="Delete"
-                          aria-label={`Delete ${f.file_name}`}
+                        <div className="aspect-square rounded-md bg-muted/40 flex items-center justify-center overflow-hidden mb-2">
+                          {isImage && thumb ? (
+                            <img
+                              src={thumb}
+                              alt={f.file_name}
+                              loading="lazy"
+                              className="w-full h-full object-cover"
+                              draggable={false}
+                            />
+                          ) : (
+                            <Icon size={32} className="text-primary/70" />
+                          )}
+                        </div>
+                        <div
+                          className="text-xs font-medium text-foreground line-clamp-2 leading-tight"
+                          title={f.file_name}
                         >
-                          <Trash2 size={12} />
-                        </button>
+                          {f.file_name}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                          {formatBytes(f.size_bytes)}
+                        </div>
+
+                        {/* Hover actions */}
+                        <div className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              download(f);
+                            }}
+                            className="p-1.5 rounded-md bg-background/90 backdrop-blur hover:bg-primary/10 text-primary shadow-sm"
+                            title="Download"
+                            aria-label={`Download ${f.file_name}`}
+                          >
+                            <Download size={12} />
+                          </button>
+                          {canDelete && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                remove(f);
+                              }}
+                              className="p-1.5 rounded-md bg-background/90 backdrop-blur hover:bg-destructive/10 text-destructive shadow-sm"
+                              title="Delete"
+                              aria-label={`Delete ${f.file_name}`}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="w-48">
+                      <ContextMenuItem onClick={() => setPreviewFile(f)}>
+                        <Eye size={14} className="mr-2" /> Open
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => download(f)}>
+                        <Download size={14} className="mr-2" /> Download
+                      </ContextMenuItem>
+                      {canDelete && (
+                        <ContextMenuItem onClick={() => openRename(f)}>
+                          <Pencil size={14} className="mr-2" /> Rename
+                        </ContextMenuItem>
                       )}
-                    </div>
-                  </motion.div>
+                      {canDelete && <ContextMenuSeparator />}
+                      {canDelete && (
+                        <ContextMenuItem
+                          onClick={() => remove(f)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 size={14} className="mr-2" /> Delete
+                        </ContextMenuItem>
+                      )}
+                    </ContextMenuContent>
+                  </ContextMenu>
                 );
               })}
             </div>
