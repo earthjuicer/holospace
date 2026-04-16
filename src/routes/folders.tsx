@@ -553,9 +553,24 @@ function FoldersPage() {
 
                 {latest && (
                   <div
-                    className="mt-3 flex items-center gap-2.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
-                    title={`Latest: ${latest.file_name}`}
+                    className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
+                    title={latest.file_name}
                   >
+                    {hasMultiple && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigateChip(folder.id, -1);
+                        }}
+                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                        title="Previous file"
+                        aria-label="Previous file"
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {
@@ -579,12 +594,32 @@ function FoldersPage() {
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
-                          Latest file
+                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1">
+                          {idx === 0 ? "Latest file" : "File"}
+                          {hasMultiple && (
+                            <span className="text-muted-foreground/50">
+                              · {idx + 1}/{filesInFolder.length}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-foreground truncate">{latest.file_name}</div>
                       </div>
                     </button>
+                    {hasMultiple && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigateChip(folder.id, 1);
+                        }}
+                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                        title="Next file"
+                        aria-label="Next file"
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {
