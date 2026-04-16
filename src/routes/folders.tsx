@@ -158,7 +158,7 @@ function FoldersPage() {
     // Latest file per folder for the preview chip on each card.
     const { data: latestRows } = await supabase
       .from("folder_files")
-      .select("id, folder_id, file_name, mime_type, storage_path, created_at")
+      .select("id, folder_id, file_name, mime_type, storage_path, size_bytes, created_at")
       .in("folder_id", folderIds)
       .order("created_at", { ascending: false });
 
@@ -170,6 +170,7 @@ function FoldersPage() {
         file_name: row.file_name,
         mime_type: row.mime_type,
         storage_path: row.storage_path,
+        size_bytes: row.size_bytes ?? 0,
       };
     });
 
