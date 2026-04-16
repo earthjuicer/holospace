@@ -206,6 +206,7 @@ export function useLiveKitRoom() {
         roomRef.current = newRoom;
         setRoom(newRoom);
         setIsMuted(false);
+        setNeedsAudioUnlock(!newRoom.canPlaybackAudio);
         refreshParticipants(newRoom);
         refreshScreenShares(newRoom);
 
