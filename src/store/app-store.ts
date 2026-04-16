@@ -75,55 +75,57 @@ const GRADIENTS = [
 ];
 
 function seedDocuments(): Doc[] {
+  // Use deterministic IDs — these run at module load, including during SSR
+  // in the Cloudflare Worker which disallows crypto/random in global scope.
   return [
     {
-      id: uid(),
+      id: 'seed-doc-1',
       title: 'Getting Started',
       icon: '🚀',
       coverGradient: GRADIENTS[0],
       blocks: [
-        { id: uid(), type: 'heading1', content: 'Welcome to your workspace' },
-        { id: uid(), type: 'paragraph', content: 'This is your personal productivity hub. Create documents, manage tasks, and stay organized.' },
-        { id: uid(), type: 'heading2', content: 'Quick tips' },
-        { id: uid(), type: 'bullet', content: 'Use the sidebar to navigate between pages' },
-        { id: uid(), type: 'bullet', content: 'Type / in the editor to insert different block types' },
-        { id: uid(), type: 'bullet', content: 'Press Cmd+K to search across all your pages' },
-        { id: uid(), type: 'divider', content: '' },
-        { id: uid(), type: 'quote', content: 'The secret of getting ahead is getting started.' },
+        { id: 'seed-doc-1-b1', type: 'heading1', content: 'Welcome to your workspace' },
+        { id: 'seed-doc-1-b2', type: 'paragraph', content: 'This is your personal productivity hub. Create documents, manage tasks, and stay organized.' },
+        { id: 'seed-doc-1-b3', type: 'heading2', content: 'Quick tips' },
+        { id: 'seed-doc-1-b4', type: 'bullet', content: 'Use the sidebar to navigate between pages' },
+        { id: 'seed-doc-1-b5', type: 'bullet', content: 'Type / in the editor to insert different block types' },
+        { id: 'seed-doc-1-b6', type: 'bullet', content: 'Press Cmd+K to search across all your pages' },
+        { id: 'seed-doc-1-b7', type: 'divider', content: '' },
+        { id: 'seed-doc-1-b8', type: 'quote', content: 'The secret of getting ahead is getting started.' },
       ],
-      pinned: true, favorite: true, lastEdited: Date.now(), parentId: null,
+      pinned: true, favorite: true, lastEdited: 0, parentId: null,
     },
     {
-      id: uid(),
+      id: 'seed-doc-2',
       title: 'Meeting Notes',
       icon: '📝',
       coverGradient: GRADIENTS[1],
       blocks: [
-        { id: uid(), type: 'heading1', content: 'Team Sync — April 2026' },
-        { id: uid(), type: 'paragraph', content: 'Attendees: Alex, Jordan, Sam, Taylor' },
-        { id: uid(), type: 'heading2', content: 'Agenda' },
-        { id: uid(), type: 'numbered', content: 'Product roadmap review' },
-        { id: uid(), type: 'numbered', content: 'Design system updates' },
-        { id: uid(), type: 'numbered', content: 'Sprint planning' },
-        { id: uid(), type: 'heading2', content: 'Action Items' },
-        { id: uid(), type: 'bullet', content: 'Finalize Q2 milestones by Friday' },
-        { id: uid(), type: 'bullet', content: 'Schedule design review session' },
+        { id: 'seed-doc-2-b1', type: 'heading1', content: 'Team Sync — April 2026' },
+        { id: 'seed-doc-2-b2', type: 'paragraph', content: 'Attendees: Alex, Jordan, Sam, Taylor' },
+        { id: 'seed-doc-2-b3', type: 'heading2', content: 'Agenda' },
+        { id: 'seed-doc-2-b4', type: 'numbered', content: 'Product roadmap review' },
+        { id: 'seed-doc-2-b5', type: 'numbered', content: 'Design system updates' },
+        { id: 'seed-doc-2-b6', type: 'numbered', content: 'Sprint planning' },
+        { id: 'seed-doc-2-b7', type: 'heading2', content: 'Action Items' },
+        { id: 'seed-doc-2-b8', type: 'bullet', content: 'Finalize Q2 milestones by Friday' },
+        { id: 'seed-doc-2-b9', type: 'bullet', content: 'Schedule design review session' },
       ],
-      pinned: false, favorite: true, lastEdited: Date.now() - 3600000, parentId: null,
+      pinned: false, favorite: true, lastEdited: 0, parentId: null,
     },
     {
-      id: uid(),
+      id: 'seed-doc-3',
       title: 'Project Ideas',
       icon: '💡',
       coverGradient: GRADIENTS[2],
       blocks: [
-        { id: uid(), type: 'heading1', content: 'Brainstorm' },
-        { id: uid(), type: 'paragraph', content: 'A collection of project ideas to explore.' },
-        { id: uid(), type: 'bullet', content: 'AI-powered recipe generator' },
-        { id: uid(), type: 'bullet', content: 'Collaborative mood board app' },
-        { id: uid(), type: 'bullet', content: 'Personal finance dashboard' },
+        { id: 'seed-doc-3-b1', type: 'heading1', content: 'Brainstorm' },
+        { id: 'seed-doc-3-b2', type: 'paragraph', content: 'A collection of project ideas to explore.' },
+        { id: 'seed-doc-3-b3', type: 'bullet', content: 'AI-powered recipe generator' },
+        { id: 'seed-doc-3-b4', type: 'bullet', content: 'Collaborative mood board app' },
+        { id: 'seed-doc-3-b5', type: 'bullet', content: 'Personal finance dashboard' },
       ],
-      pinned: false, favorite: false, lastEdited: Date.now() - 86400000, parentId: null,
+      pinned: false, favorite: false, lastEdited: 0, parentId: null,
     },
   ];
 }
@@ -139,25 +141,23 @@ function seedColumns(): KanbanColumn[] {
 
 function seedTasks(): Task[] {
   return [
-    { id: uid(), title: 'Design new landing page', columnId: 'todo', labels: ['design'], dueDate: '2026-04-20', priority: 'high' },
-    { id: uid(), title: 'Write API documentation', columnId: 'todo', labels: ['docs'], dueDate: '2026-04-22', priority: 'medium' },
-    { id: uid(), title: 'Implement auth flow', columnId: 'in-progress', labels: ['dev'], dueDate: '2026-04-18', priority: 'high' },
-    { id: uid(), title: 'Set up CI/CD pipeline', columnId: 'in-progress', labels: ['devops'], dueDate: null, priority: 'medium' },
-    { id: uid(), title: 'Review pull request #42', columnId: 'review', labels: ['dev'], dueDate: '2026-04-17', priority: 'low' },
-    { id: uid(), title: 'Update onboarding copy', columnId: 'done', labels: ['content'], dueDate: null, priority: 'low' },
-    { id: uid(), title: 'Fix mobile navigation bug', columnId: 'done', labels: ['bug'], dueDate: '2026-04-15', priority: 'high' },
+    { id: 'seed-task-1', title: 'Design new landing page', columnId: 'todo', labels: ['design'], dueDate: '2026-04-20', priority: 'high' },
+    { id: 'seed-task-2', title: 'Write API documentation', columnId: 'todo', labels: ['docs'], dueDate: '2026-04-22', priority: 'medium' },
+    { id: 'seed-task-3', title: 'Implement auth flow', columnId: 'in-progress', labels: ['dev'], dueDate: '2026-04-18', priority: 'high' },
+    { id: 'seed-task-4', title: 'Set up CI/CD pipeline', columnId: 'in-progress', labels: ['devops'], dueDate: null, priority: 'medium' },
+    { id: 'seed-task-5', title: 'Review pull request #42', columnId: 'review', labels: ['dev'], dueDate: '2026-04-17', priority: 'low' },
+    { id: 'seed-task-6', title: 'Update onboarding copy', columnId: 'done', labels: ['content'], dueDate: null, priority: 'low' },
+    { id: 'seed-task-7', title: 'Fix mobile navigation bug', columnId: 'done', labels: ['bug'], dueDate: '2026-04-15', priority: 'high' },
   ];
 }
 
 function seedEvents(): CalEvent[] {
-  const today = new Date();
-  const y = today.getFullYear();
-  const m = today.getMonth();
+  // Static dates so this can run at module load on the server.
   return [
-    { id: uid(), title: 'Team standup', date: `${y}-${String(m + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`, color: '#667eea' },
-    { id: uid(), title: 'Design review', date: `${y}-${String(m + 1).padStart(2, '0')}-${String(Math.min(today.getDate() + 2, 28)).padStart(2, '0')}`, color: '#f5576c' },
-    { id: uid(), title: 'Sprint retro', date: `${y}-${String(m + 1).padStart(2, '0')}-${String(Math.min(today.getDate() + 5, 28)).padStart(2, '0')}`, color: '#43e97b' },
-    { id: uid(), title: 'Lunch with Alex', date: `${y}-${String(m + 1).padStart(2, '0')}-${String(Math.min(today.getDate() + 1, 28)).padStart(2, '0')}`, color: '#4facfe' },
+    { id: 'seed-event-1', title: 'Team standup', date: '2026-04-16', color: '#667eea' },
+    { id: 'seed-event-2', title: 'Design review', date: '2026-04-18', color: '#f5576c' },
+    { id: 'seed-event-3', title: 'Sprint retro', date: '2026-04-21', color: '#43e97b' },
+    { id: 'seed-event-4', title: 'Lunch with Alex', date: '2026-04-17', color: '#4facfe' },
   ];
 }
 
