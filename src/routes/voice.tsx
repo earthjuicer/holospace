@@ -7,7 +7,9 @@ import {
   Mic, MicOff, Headphones, PhoneOff, Plus, Users, Volume2, Hash, Link2, Copy, Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import { playJoinSound, playLeaveSound } from "@/lib/voice-sounds";
+import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
+import { useScreenShare } from "@/hooks/use-screen-share";
+import { ScreenShareControls } from "@/components/ScreenShareControls";
 
 export const Route = createFileRoute("/voice")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -51,6 +53,7 @@ function VoicePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const screenShare = useScreenShare();
 
   useEffect(() => {
     fetchChannels();
@@ -184,11 +187,21 @@ function VoicePage() {
       await supabase.removeChannel(presenceChannelRef.current);
       presenceChannelRef.current = null;
     }
+    if (screenShare.isSharing) screenShare.stopShare();
     setActiveChannel(null);
     setIsMuted(false);
     setIsDeafened(false);
     playLeaveSound();
     toast("Left voice channel");
+  };
+
+  const toggleMute = () => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      if (next) playMuteSound();
+      else playUnmuteSound();
+      return next;
+    });
   };
 
   // Update mute state in presence
@@ -409,13 +422,20 @@ function VoicePage() {
                       {copiedId === activeChannelData.id ? <Check size={18} /> : <Copy size={18} />}
                     </button>
                   )}
+                  <ScreenShareControls
+                    isSharing={screenShare.isSharing}
+                    stream={screenShare.stream}
+                    onStart={(opts) => screenShare.startShare(opts)}
+                    onStop={screenShare.stopShare}
+                  />
                   <button
-                    onClick={() => setIsMuted(!isMuted)}
+                    onClick={toggleMute}
                     className={`p-2.5 rounded-xl transition-all ${
                       isMuted
                         ? "bg-destructive/20 text-destructive"
                         : "bg-muted/50 text-foreground hover:bg-muted"
                     }`}
+                    title={isMuted ? "Unmute" : "Mute"}
                   >
                     {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
                   </button>
