@@ -5,9 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Mic, MicOff, Headphones, PhoneOff, Users, Volume2, Copy, Check,
-  RefreshCw, Clock, UserX, Ban, Link2, Volume1,
+  RefreshCw, Clock, UserX, Ban, Link2, Volume1, Bell,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ringChannel, ringUser } from "@/lib/ring-actions";
 import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
 import { useLiveKitRoom, type VoiceParticipantInfo } from "@/hooks/use-livekit-room";
 import { ScreenShareControls } from "@/components/ScreenShareControls";
@@ -354,20 +355,39 @@ function VoicePage() {
                         </Popover>
                       );
 
-                      if (isCreator) {
+                      // Anyone (including the creator) can right-click another
+                      // participant. Hosts can additionally kick/ban; everyone
+                      // can ring an absent / signed-in user.
+                      // Note: ringing only works for non-guest, non-local participants.
+                      const canRing = !p.isLocal && !p.isGuest && activeChannel;
+                      if (isCreator || canRing) {
                         return (
                           <ContextMenu key={p.identity}>
                             <ContextMenuTrigger asChild>
                               <div className="cursor-context-menu">{withPopover}</div>
                             </ContextMenuTrigger>
                             <ContextMenuContent>
-                              <ContextMenuItem
-                                onClick={() => setConfirmKick({ p, ban: false })}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <UserX size={14} className="mr-2" /> Kick {p.name}
-                              </ContextMenuItem>
-                              {p.isGuest && (
+                              {canRing && (
+                                <ContextMenuItem
+                                  onClick={() =>
+                                    ringUser({
+                                      channelId: activeChannel.id,
+                                      recipientId: p.identity,
+                                    })
+                                  }
+                                >
+                                  <Bell size={14} className="mr-2" /> Ring {p.name}
+                                </ContextMenuItem>
+                              )}
+                              {isCreator && (
+                                <ContextMenuItem
+                                  onClick={() => setConfirmKick({ p, ban: false })}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <UserX size={14} className="mr-2" /> Kick {p.name}
+                                </ContextMenuItem>
+                              )}
+                              {isCreator && p.isGuest && (
                                 <ContextMenuItem
                                   onClick={() => setConfirmKick({ p, ban: true })}
                                   className="text-destructive focus:text-destructive"
@@ -416,6 +436,14 @@ function VoicePage() {
               </div>
 
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => activeChannel && ringChannel(activeChannel.id)}
+                  className="p-2.5 rounded-xl bg-muted/50 text-foreground hover:bg-muted transition-all"
+                  title="Ring everyone in this channel"
+                  aria-label="Ring everyone"
+                >
+                  <Bell size={18} />
+                </button>
                 {isCreator && (
                   <button
                     onClick={openInviteDialog}
