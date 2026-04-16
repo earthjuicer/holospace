@@ -35,7 +35,6 @@ interface Prompt {
   content: string;
   model: string;
   tags: string[];
-  is_private: boolean;
   updated_at: string;
 }
 
@@ -161,7 +160,6 @@ function PromptsPage() {
       model: 'google/gemini-3-flash-preview',
       tags: [],
       folder_id: null,
-      is_private: true,
       ...seed,
     });
     setSelected(null);
@@ -209,7 +207,6 @@ function PromptsPage() {
       model: editing.model ?? 'google/gemini-3-flash-preview',
       tags: editing.tags ?? [],
       folder_id: editing.folder_id ?? null,
-      is_private: !editing.folder_id,
     };
 
     if (editing.id) {

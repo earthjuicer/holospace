@@ -27,7 +27,7 @@ interface VoiceChannel {
   created_by: string;
   is_active: boolean;
   max_participants: number;
-  invite_code: string;
+  invite_code?: string; // only present for channels the user created
 }
 
 interface Participant {
@@ -83,7 +83,7 @@ function VoicePage() {
   const fetchChannels = async () => {
     const { data } = await supabase
       .from("voice_channels")
-      .select("*")
+      .select("id, name, created_by, is_active, max_participants")
       .eq("is_active", true)
       .order("created_at", { ascending: true });
     if (data) setChannels(data as VoiceChannel[]);
@@ -193,13 +193,24 @@ function VoicePage() {
     }
   }, [isMuted]);
 
-  const copyInviteLink = (channel: VoiceChannel, e: React.MouseEvent) => {
+  const copyInviteLink = async (channel: VoiceChannel, e: React.MouseEvent) => {
     e.stopPropagation();
-    const link = `${window.location.origin}/voice?join=${channel.invite_code}`;
+    if (channel.created_by !== user?.id) {
+      toast.error("Only the channel creator can share the invite link");
+      return;
+    }
+    const { data: code, error } = await supabase.rpc("get_channel_invite_code", {
+      _channel_id: channel.id,
+    });
+    if (error || !code) {
+      toast.error("Could not load invite code");
+      return;
+    }
+    const link = `${window.location.origin}/voice?join=${code}`;
     navigator.clipboard.writeText(link);
     setCopiedId(channel.id);
     toast.success("Invite link copied!", {
-      description: `Code: ${channel.invite_code}`,
+      description: `Code: ${code}`,
     });
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -292,13 +303,15 @@ function VoicePage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => copyInviteLink(channel, e)}
-                      className="p-2 rounded-lg bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-                      title="Copy invite link"
-                    >
-                      {copiedId === channel.id ? <Check size={16} /> : <Link2 size={16} />}
-                    </button>
+                    {channel.created_by === user?.id && (
+                      <button
+                        onClick={(e) => copyInviteLink(channel, e)}
+                        className="p-2 rounded-lg bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+                        title="Copy invite link"
+                      >
+                        {copiedId === channel.id ? <Check size={16} /> : <Link2 size={16} />}
+                      </button>
+                    )}
                     {isActive && (
                       <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-500 text-xs font-medium">
                         Connected
@@ -335,9 +348,11 @@ function VoicePage() {
                         +{channelParticipants.length - 6} more
                       </span>
                     )}
-                    <code className="ml-auto text-[10px] text-muted-foreground/60 font-mono">
-                      #{channel.invite_code}
-                    </code>
+                    {channel.created_by === user?.id && channel.invite_code && (
+                      <code className="ml-auto text-[10px] text-muted-foreground/60 font-mono">
+                        #{channel.invite_code}
+                      </code>
+                    )}
                   </div>
                 )}
               </motion.div>
@@ -375,13 +390,15 @@ function VoicePage() {
                 </div>
 
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={(e) => copyInviteLink(activeChannelData, e)}
-                    className="p-2.5 rounded-xl bg-muted/50 text-foreground hover:bg-muted transition-all"
-                    title="Copy invite link"
-                  >
-                    {copiedId === activeChannelData.id ? <Check size={18} /> : <Copy size={18} />}
-                  </button>
+                  {activeChannelData.created_by === user?.id && (
+                    <button
+                      onClick={(e) => copyInviteLink(activeChannelData, e)}
+                      className="p-2.5 rounded-xl bg-muted/50 text-foreground hover:bg-muted transition-all"
+                      title="Copy invite link"
+                    >
+                      {copiedId === activeChannelData.id ? <Check size={18} /> : <Copy size={18} />}
+                    </button>
+                  )}
                   <button
                     onClick={() => setIsMuted(!isMuted)}
                     className={`p-2.5 rounded-xl transition-all ${

@@ -23,7 +23,6 @@ interface Folder {
   name: string;
   icon: string;
   owner_id: string;
-  is_private: boolean;
   created_at: string;
 }
 
@@ -196,13 +195,13 @@ function FoldersPage() {
                   <div>
                     <div className="font-medium text-foreground">{folder.name}</div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
-                      {folder.is_private ? (
+                      {folder.owner_id === user?.id ? (
                         <>
-                          <Lock size={10} /> Private
+                          <Globe size={10} /> Owner
                         </>
                       ) : (
                         <>
-                          <Globe size={10} /> Shared
+                          <Lock size={10} /> Shared with you
                         </>
                       )}
                     </div>
