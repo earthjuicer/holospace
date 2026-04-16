@@ -41,6 +41,10 @@ export function useLiveKitRoom() {
   const [screenShares, setScreenShares] = useState<ScreenShareTrackInfo[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  // Mobile browsers (especially iOS Safari) often block autoplay until the
+  // user taps after the track is attached. UI can show a "Tap to enable audio"
+  // prompt + call unlockAudio() from a click handler.
+  const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
   const roomRef = useRef<Room | null>(null);
 
   const refreshParticipants = useCallback((r: Room) => {
@@ -124,14 +128,28 @@ export function useLiveKitRoom() {
           .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
             // Attach remote audio so participants can actually hear each other.
             // LiveKit does NOT auto-play remote audio — we must attach it to a DOM element.
+            // Mobile (iOS Safari, some Android Chrome) requires playsinline +
+            // autoplay + an explicit play() call, and refuses display:none audio.
             if (track.kind === Track.Kind.Audio) {
-              const el = (track as RemoteAudioTrack).attach();
+              const el = (track as RemoteAudioTrack).attach() as HTMLAudioElement;
               el.setAttribute("data-lk-audio", "1");
-              el.style.display = "none";
+              el.autoplay = true;
+              el.setAttribute("playsinline", "");
+              (el as any).playsInline = true;
+              el.controls = false;
+              el.style.position = "fixed";
+              el.style.width = "1px";
+              el.style.height = "1px";
+              el.style.opacity = "0";
+              el.style.pointerEvents = "none";
               document.body.appendChild(el);
+              el.play().catch(() => setNeedsAudioUnlock(true));
             }
             refreshScreenShares(newRoom);
             refreshParticipants(newRoom);
+          })
+          .on(RoomEvent.AudioPlaybackStatusChanged, () => {
+            setNeedsAudioUnlock(!newRoom.canPlaybackAudio);
           })
           .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
             if (track.kind === Track.Kind.Audio) {
@@ -188,6 +206,7 @@ export function useLiveKitRoom() {
         roomRef.current = newRoom;
         setRoom(newRoom);
         setIsMuted(false);
+        setNeedsAudioUnlock(!newRoom.canPlaybackAudio);
         refreshParticipants(newRoom);
         refreshScreenShares(newRoom);
 
@@ -212,7 +231,25 @@ export function useLiveKitRoom() {
     setScreenShares([]);
     setIsSharing(false);
     setIsMuted(false);
+    setNeedsAudioUnlock(false);
     setConnectionState(ConnectionState.Disconnected);
+  }, []);
+
+  // Call from a click/tap handler when needsAudioUnlock is true.
+  const unlockAudio = useCallback(async () => {
+    const r = roomRef.current;
+    if (r) {
+      try {
+        await r.startAudio();
+      } catch {
+        /* ignore */
+      }
+    }
+    const audios = document.querySelectorAll<HTMLAudioElement>("audio[data-lk-audio]");
+    await Promise.all(
+      Array.from(audios).map((a) => a.play().catch(() => undefined))
+    );
+    setNeedsAudioUnlock(false);
   }, []);
 
   const toggleMute = useCallback(async () => {
@@ -307,11 +344,13 @@ export function useLiveKitRoom() {
     screenShares,
     isMuted,
     isSharing,
+    needsAudioUnlock,
     connect,
     disconnect,
     toggleMute,
     startScreenShare,
     stopScreenShare,
     setParticipantVolume,
+    unlockAudio,
   };
 }

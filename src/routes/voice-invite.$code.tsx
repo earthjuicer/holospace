@@ -43,6 +43,9 @@ function VoiceInvitePage() {
   const [participants, setParticipants] = useState<ParticipantInfo[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
+  // iOS Safari + some Android browsers block audio autoplay until a user
+  // gesture happens AFTER the track is attached. We surface a tap prompt.
+  const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
   const roomRef = useRef<Room | null>(null);
 
   const refreshParticipants = useCallback((r: Room) => {
@@ -62,6 +65,44 @@ function VoiceInvitePage() {
     setParticipants(list);
   }, []);
 
+  // Attach a remote audio track in a way that mobile browsers will actually play.
+  // - `playsinline` is required on iOS or playback is silently blocked.
+  // - `autoplay` + explicit `play()` covers Android Chrome quirks.
+  // - We keep the element in the DOM (not display:none on iOS — Safari has
+  //   historically refused to play hidden <audio>; using visibility:hidden +
+  //   zero size is safer).
+  const attachRemoteAudio = useCallback((track: RemoteAudioTrack) => {
+    const el = track.attach() as HTMLAudioElement;
+    el.setAttribute("data-lk-audio", "1");
+    el.autoplay = true;
+    el.setAttribute("playsinline", "");
+    (el as any).playsInline = true;
+    el.controls = false;
+    el.style.position = "fixed";
+    el.style.width = "1px";
+    el.style.height = "1px";
+    el.style.opacity = "0";
+    el.style.pointerEvents = "none";
+    document.body.appendChild(el);
+    el.play().catch(() => {
+      // Autoplay was blocked — show the unlock UI so the user can tap.
+      setNeedsAudioUnlock(true);
+    });
+  }, []);
+
+  const unlockAudio = useCallback(async () => {
+    try {
+      await roomRef.current?.startAudio();
+    } catch {
+      /* ignore */
+    }
+    const audios = document.querySelectorAll<HTMLAudioElement>("audio[data-lk-audio]");
+    await Promise.all(
+      Array.from(audios).map((a) => a.play().catch(() => undefined))
+    );
+    setNeedsAudioUnlock(false);
+  }, []);
+
   useEffect(() => {
     return () => {
       roomRef.current?.disconnect();
@@ -70,8 +111,8 @@ function VoiceInvitePage() {
   }, []);
 
   useEffect(() => {
-    document.querySelectorAll("audio").forEach((el) => {
-      (el as HTMLAudioElement).muted = isDeafened;
+    document.querySelectorAll<HTMLAudioElement>("audio[data-lk-audio]").forEach((el) => {
+      el.muted = isDeafened;
     });
   }, [isDeafened, participants.length]);
 
@@ -111,10 +152,7 @@ function VoiceInvitePage() {
         .on(RoomEvent.ParticipantDisconnected, () => refreshParticipants(room))
         .on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
           if (track.kind === Track.Kind.Audio) {
-            const el = (track as RemoteAudioTrack).attach();
-            el.setAttribute("data-lk-audio", "1");
-            el.style.display = "none";
-            document.body.appendChild(el);
+            attachRemoteAudio(track as RemoteAudioTrack);
           }
           refreshParticipants(room);
         })
@@ -123,6 +161,10 @@ function VoiceInvitePage() {
             (track as RemoteAudioTrack).detach().forEach((el) => el.remove());
           }
           refreshParticipants(room);
+        })
+        .on(RoomEvent.AudioPlaybackStatusChanged, () => {
+          // True when the browser has granted us permission to play audio.
+          setNeedsAudioUnlock(!room.canPlaybackAudio);
         })
         .on(RoomEvent.TrackMuted, () => refreshParticipants(room))
         .on(RoomEvent.TrackUnmuted, () => refreshParticipants(room))
@@ -137,6 +179,8 @@ function VoiceInvitePage() {
       }
       roomRef.current = room;
       refreshParticipants(room);
+      // If the browser already blocked autoplay, surface the unlock prompt.
+      if (!room.canPlaybackAudio) setNeedsAudioUnlock(true);
       playJoinSound();
       setStage("in-room");
     } catch (err: any) {
@@ -253,6 +297,16 @@ function VoiceInvitePage() {
                   <Users size={12} /> {participants.length}
                 </span>
               </div>
+
+              {needsAudioUnlock && (
+                <button
+                  onClick={unlockAudio}
+                  className="w-full mb-4 px-4 py-3 rounded-lg bg-primary/15 border border-primary/40 text-primary text-sm font-medium flex items-center justify-center gap-2 hover:bg-primary/25 transition-colors"
+                >
+                  <Volume2 size={16} />
+                  Tap to enable audio
+                </button>
+              )}
 
               <div className="glass p-4">
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
