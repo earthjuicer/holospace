@@ -103,7 +103,7 @@ export function ScreenShareControls({ isSharing, stream, onStart, onStop }: Prop
           >
             <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
               <span className="text-xs font-medium text-foreground flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
                 You're sharing
               </span>
               <button
