@@ -7,6 +7,7 @@ import {
   LocalParticipant,
   RemoteTrackPublication,
   RemoteTrack,
+  RemoteAudioTrack,
   Participant,
   ConnectionState,
   ScreenShareCaptureOptions,
