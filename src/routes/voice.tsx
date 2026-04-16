@@ -33,7 +33,9 @@ function VoicePage() {
   const [activeChannel, setActiveChannel] = useState<SidebarChannel | null>(null);
   const [copied, setCopied] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
+  const [pttActive, setPttActive] = useState(false);
   const lastChannelRef = useRef<string | null>(null);
+  const pttHoldingRef = useRef(false);
 
   const lk = useLiveKitRoom();
 
