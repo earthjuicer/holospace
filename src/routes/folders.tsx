@@ -67,6 +67,9 @@ function FoldersPage() {
   const [shares, setShares] = useState<FolderShare[]>([]);
   const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
   const [latestFiles, setLatestFiles] = useState<Record<string, LatestFile>>({});
+  const [ownerProfiles, setOwnerProfiles] = useState<
+    Record<string, { display_name: string | null; avatar_url: string | null }>
+  >({});
   // Folder IDs that currently have files being dropped onto them.
   const [uploadingFolderId, setUploadingFolderId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
