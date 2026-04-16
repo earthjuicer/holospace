@@ -104,7 +104,28 @@ function FoldersPage() {
     }
   };
 
-  const openPreview = (file: LatestFile) => {
+  // Move chip to next/prev file in this folder. Lazily signs image thumbnails
+  // when navigating into them so we don't pay the cost up-front for every file.
+  const navigateChip = async (folderId: string, dir: 1 | -1) => {
+    const files = folderFiles[folderId];
+    if (!files || files.length < 2) return;
+    const cur = chipIndex[folderId] ?? 0;
+    const nextIdx = (cur + dir + files.length) % files.length;
+    setChipIndex((p) => ({ ...p, [folderId]: nextIdx }));
+    const target = files[nextIdx];
+    if (target.thumbUrl || !target.mime_type?.startsWith("image/")) return;
+    const { data: signed } = await supabase.storage
+      .from("folder-files")
+      .createSignedUrl(target.storage_path, 600);
+    if (!signed?.signedUrl) return;
+    setFolderFiles((prev) => {
+      const list = prev[folderId];
+      if (!list) return prev;
+      const updated = [...list];
+      updated[nextIdx] = { ...updated[nextIdx], thumbUrl: signed.signedUrl };
+      return { ...prev, [folderId]: updated };
+    });
+  };
     setPreviewFile({
       id: file.id,
       file_name: file.file_name,
