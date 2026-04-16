@@ -47,6 +47,7 @@ interface LatestFile {
   file_name: string;
   mime_type: string | null;
   storage_path: string;
+  size_bytes: number;
   /** Signed URL for image previews; only set when mime starts with image/. */
   thumbUrl?: string;
 }
