@@ -77,6 +77,38 @@ function FoldersPage() {
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
   const [sharingBusyFolderId, setSharingBusyFolderId] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const downloadFile = async (file: LatestFile) => {
+    setDownloadingId(file.id);
+    try {
+      const { data, error } = await supabase.storage
+        .from("folder-files")
+        .createSignedUrl(file.storage_path, 60, { download: file.file_name });
+      if (error || !data?.signedUrl) throw error ?? new Error("No URL");
+      const a = document.createElement("a");
+      a.href = data.signedUrl;
+      a.download = file.file_name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Download failed");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const openPreview = (file: LatestFile) => {
+    setPreviewFile({
+      id: file.id,
+      file_name: file.file_name,
+      mime_type: file.mime_type,
+      storage_path: file.storage_path,
+      size_bytes: file.size_bytes,
+    });
+  };
 
   useEffect(() => {
     if (!user) return;
