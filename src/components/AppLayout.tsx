@@ -12,7 +12,18 @@ import { IncomingRing } from './IncomingRing';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Toaster } from 'sonner';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password', '/share'];
+// Routes that anyone can visit without signing in. Anything matching one of
+// these prefixes skips the auth redirect and is rendered as a bare page
+// (no app sidebar / mobile chrome). Voice invite links work for guests —
+// they pick a name and join, no signup required.
+const PUBLIC_ROUTES = [
+  '/login',
+  '/signup',
+  '/forgot-password',
+  '/reset-password',
+  '/share',
+  '/voice-invite',
+];
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
