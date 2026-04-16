@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { FolderFiles } from "@/components/FolderFiles";
 import { FolderMemberPanel } from "@/components/FolderMemberPanel";
-import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, Link2Off, ChevronDown } from "lucide-react";
+import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, Link2Off, ChevronDown, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -43,6 +43,7 @@ interface Folder {
 interface Share {
   token: string;
   expires_at: string;
+  allow_upload: boolean;
 }
 
 function formatRemaining(expiresAt: string) {
@@ -92,7 +93,7 @@ function FolderDetailPage() {
             .maybeSingle(),
           supabase
             .from("folder_public_shares")
-            .select("token, expires_at")
+            .select("token, expires_at, allow_upload")
             .eq("folder_id", folderId)
             .maybeSingle(),
         ]);
@@ -124,25 +125,49 @@ function FolderDetailPage() {
   const shareActive = share && new Date(share.expires_at).getTime() > Date.now();
   const shareUrl = share ? `${window.location.origin}/share/${share.token}` : "";
 
-  const generateOrRegen = async (value: ExpiryValue = expiry) => {
+  const generateOrRegen = async (value: ExpiryValue = expiry, allowUpload?: boolean) => {
     const opt = EXPIRY_OPTIONS.find((o) => o.value === value) ?? EXPIRY_OPTIONS[1];
+    const nextAllowUpload = allowUpload ?? share?.allow_upload ?? true;
     setGenerating(true);
     const { data, error } = await supabase.rpc("regen_share_token", {
       _folder_id: folderId,
       _expires_in: opt.interval,
+      _allow_upload: nextAllowUpload,
     });
     setGenerating(false);
     if (error || !data?.[0]) {
       toast.error(error?.message || "Failed to generate link");
       return;
     }
-    setShare({ token: data[0].token, expires_at: data[0].expires_at });
+    setShare({
+      token: data[0].token,
+      expires_at: data[0].expires_at,
+      allow_upload: data[0].allow_upload,
+    });
     setExpiry(value);
     toast.success(
       value === "never"
         ? "Share link generated — never expires"
         : `New share link · expires in ${opt.label.toLowerCase()}`
     );
+  };
+
+  const toggleAllowUpload = async () => {
+    if (!share) return;
+    const next = !share.allow_upload;
+    // Optimistic UI
+    setShare({ ...share, allow_upload: next });
+    const { error } = await supabase.rpc("set_share_allow_upload", {
+      _folder_id: folderId,
+      _allow_upload: next,
+    });
+    if (error) {
+      // Revert
+      setShare({ ...share });
+      toast.error(error.message || "Failed to update permission");
+      return;
+    }
+    toast.success(next ? "Visitors can now upload" : "Link is now read-only");
   };
 
   // Revoke the public share immediately by deleting the row. The /share/:token
@@ -272,6 +297,46 @@ function FolderDetailPage() {
                     aria-label="Stop sharing folder"
                   >
                     <Link2Off size={14} />
+                  </button>
+                </div>
+
+                {/* Permission toggle */}
+                <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-muted/30 border border-border/30">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {share!.allow_upload ? (
+                      <Unlock size={14} className="text-primary shrink-0" />
+                    ) : (
+                      <Lock size={14} className="text-muted-foreground shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-foreground">
+                        {share!.allow_upload ? "Allow upload" : "Read-only"}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground truncate">
+                        {share!.allow_upload
+                          ? "Visitors can view, download, and upload files"
+                          : "Visitors can only view and download files"}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={toggleAllowUpload}
+                    role="switch"
+                    aria-checked={share!.allow_upload}
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                      share!.allow_upload ? "bg-primary" : "bg-muted-foreground/40"
+                    }`}
+                    title={
+                      share!.allow_upload
+                        ? "Switch to read-only"
+                        : "Allow visitors to upload"
+                    }
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform ${
+                        share!.allow_upload ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    />
                   </button>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">

@@ -17,6 +17,7 @@ interface ShareInfo {
   folder_name: string;
   folder_icon: string;
   expires_at: string;
+  allow_upload: boolean;
 }
 
 function formatRemaining(expiresAt: string) {
@@ -89,7 +90,9 @@ function SharePage() {
                   {info.folder_name}
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Shared folder · view, download, and upload
+                  {info.allow_upload
+                    ? "Shared folder · view, download, and upload"
+                    : "Shared folder · view & download only"}
                 </p>
               </div>
             </div>
@@ -102,6 +105,7 @@ function SharePage() {
             folderId={info.folder_id}
             shareToken={token}
             canDelete={false}
+            canUpload={info.allow_upload}
           />
         </motion.div>
       </div>
