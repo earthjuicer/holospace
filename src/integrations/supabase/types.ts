@@ -434,6 +434,15 @@ export type Database = {
           folder_name: string
         }[]
       }
+      get_voice_channel_by_invite: {
+        Args: { _invite_code: string }
+        Returns: {
+          channel_id: string
+          channel_name: string
+          channel_type: string
+          is_active: boolean
+        }[]
+      }
       is_channel_member: {
         Args: { _channel_id: string; _user_id: string }
         Returns: boolean

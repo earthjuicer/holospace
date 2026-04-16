@@ -10,7 +10,7 @@ import { Onboarding } from './Onboarding';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Toaster } from 'sonner';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password', '/share'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password', '/share', '/voice-invite'];
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();

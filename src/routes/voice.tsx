@@ -166,7 +166,7 @@ function VoicePage() {
       toast.error("Could not load invite code");
       return;
     }
-    const link = `${window.location.origin}/voice?join=${code}`;
+    const link = `${window.location.origin}/voice-invite/${code}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     toast.success("Invite link copied!");
