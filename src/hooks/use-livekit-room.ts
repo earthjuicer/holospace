@@ -285,6 +285,7 @@ export function useLiveKitRoom() {
     setRoom(null);
     setParticipants([]);
     setScreenShares([]);
+    setAudioLevels({});
     setIsSharing(false);
     setIsMuted(false);
     setNeedsAudioUnlock(false);
