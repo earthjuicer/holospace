@@ -88,6 +88,31 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
 
   useEffect(() => {
     load();
+    // Anonymous share-token visitors can't use realtime — skip subscription.
+    if (shareToken) return;
+
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const sub = supabase
+      .channel(`folder-files-${folderId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "folder_files",
+          filter: `folder_id=eq.${folderId}`,
+        },
+        () => {
+          if (t) clearTimeout(t);
+          t = setTimeout(load, 200);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (t) clearTimeout(t);
+      supabase.removeChannel(sub);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folderId, shareToken]);
 
