@@ -92,11 +92,33 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
   }, [file, siblings]);
 
   const goPrev = () => {
-    if (prev && onNavigate) onNavigate(prev);
+    if (prev && onNavigate) {
+      onNavigate(prev);
+      setShowNavHint(false);
+    }
   };
   const goNext = () => {
-    if (next && onNavigate) onNavigate(next);
+    if (next && onNavigate) {
+      onNavigate(next);
+      setShowNavHint(false);
+    }
   };
+
+  // Show the pulse hint exactly once per user when they open a multi-file folder.
+  useEffect(() => {
+    if (!file) return;
+    const hasSiblings = !!siblings && siblings.length > 1;
+    if (!hasSiblings) return;
+    try {
+      if (localStorage.getItem("preview-nav-hint-seen")) return;
+      setShowNavHint(true);
+      localStorage.setItem("preview-nav-hint-seen", "1");
+      const t = setTimeout(() => setShowNavHint(false), 4500);
+      return () => clearTimeout(t);
+    } catch {
+      // localStorage unavailable — silently skip the hint.
+    }
+  }, [file?.id, siblings?.length]);
 
   // Touch swipe gestures (mobile). Horizontal swipe > threshold navigates;
   // vertical-dominant swipes are ignored so page scroll/pinch still works.
