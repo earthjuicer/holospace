@@ -105,6 +105,24 @@ function PromptsPage() {
   useEffect(() => {
     if (!user) return;
     void load();
+
+    // Live-refresh prompts + their parent folders so multi-device edits and
+    // shared-folder prompts appear instantly without a manual reload.
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => void load(), 150);
+    };
+    const sub = supabase
+      .channel(`prompts-page-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prompts' }, schedule)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'folders' }, schedule)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'folder_shares' }, schedule)
+      .subscribe();
+    return () => {
+      if (t) clearTimeout(t);
+      supabase.removeChannel(sub);
+    };
   }, [user]);
 
   useEffect(() => {
