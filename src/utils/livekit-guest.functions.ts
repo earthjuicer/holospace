@@ -1,19 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 
-// Issue a LiveKit token for a GUEST joining via invite code (no Supabase auth).
-// Resolves the invite code server-side, validates the channel is active and is a
-// voice channel, then mints a short-lived LiveKit JWT bound to the channel room.
+// Issue a LiveKit token for a GUEST joining via invite code (no Supabase auth required).
+// Resolves the invite code server-side via an anon-callable RPC, validates the channel
+// is active, voice-type, not expired, and the chosen identity is not banned.
 export const getLiveKitTokenForGuest = createServerFn({ method: "POST" })
   .inputValidator(
     (data: { inviteCode: string; participantName: string }) => data
   )
   .handler(async ({ data }) => {
     const supabaseUrl = process.env.SUPABASE_URL;
-    const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !anonKey) {
-      throw new Error("Backend not configured");
-    }
+    const anonKey =
+      process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !anonKey) throw new Error("Backend not configured");
 
     const supabase = createClient(supabaseUrl, anonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -25,19 +24,29 @@ export const getLiveKitTokenForGuest = createServerFn({ method: "POST" })
     );
     if (error) throw new Error(error.message);
     const row = Array.isArray(rows) ? rows[0] : rows;
-    if (!row) throw new Error("Invalid invite link");
-    if (row.channel_type !== "voice") throw new Error("This invite is not for a voice channel");
+    if (!row) throw new Error("Invite link is invalid or has expired");
+    if (row.channel_type !== "voice")
+      throw new Error("This invite is not for a voice channel");
     if (!row.is_active) throw new Error("Channel is not active");
+
+    const cleanName =
+      (data.participantName || "Guest").trim().slice(0, 32) || "Guest";
+    const guestId = `guest-${crypto.randomUUID()}`;
+
+    // Check ban list — uses cleanName-based bans (since guests are ephemeral)
+    const { data: banned } = await supabase.rpc("is_voice_identity_banned", {
+      _channel_id: row.channel_id,
+      _identity: `guest:${cleanName.toLowerCase()}`,
+    });
+    if (banned === true) {
+      throw new Error("You have been removed from this channel");
+    }
 
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
     const url = process.env.LIVEKIT_URL;
-    if (!apiKey || !apiSecret || !url) {
-      throw new Error("LiveKit not configured");
-    }
+    if (!apiKey || !apiSecret || !url) throw new Error("LiveKit not configured");
 
-    const cleanName = (data.participantName || "Guest").trim().slice(0, 32) || "Guest";
-    const guestId = `guest-${crypto.randomUUID()}`;
     const roomName = `voice-${row.channel_id}`;
 
     const b64url = (s: string) =>

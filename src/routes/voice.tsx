@@ -4,14 +4,22 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  Mic, MicOff, Headphones, PhoneOff, Users, Volume2, Link2, Copy, Check,
+  Mic, MicOff, Headphones, PhoneOff, Users, Volume2, Copy, Check,
+  RefreshCw, Clock, UserX, Ban, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
-import { useLiveKitRoom } from "@/hooks/use-livekit-room";
+import { useLiveKitRoom, type VoiceParticipantInfo } from "@/hooks/use-livekit-room";
 import { ScreenShareControls } from "@/components/ScreenShareControls";
 import { ScreenShareViewer } from "@/components/ScreenShareViewer";
 import { ChannelSidebar, type SidebarChannel } from "@/components/ChannelSidebar";
+import { kickVoiceParticipant } from "@/utils/livekit-moderation.functions";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 export const Route = createFileRoute("/voice")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -26,20 +34,42 @@ export const Route = createFileRoute("/voice")({
   component: VoicePage,
 });
 
+function formatRemaining(expiresAt: string) {
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return "Expired";
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+}
+
 function VoicePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { join: joinCode } = Route.useSearch();
   const [activeChannel, setActiveChannel] = useState<SidebarChannel | null>(null);
-  const [copied, setCopied] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const [pttActive, setPttActive] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [, setTick] = useState(0);
+  const [confirmKick, setConfirmKick] = useState<{
+    p: VoiceParticipantInfo;
+    ban: boolean;
+  } | null>(null);
   const lastChannelRef = useRef<string | null>(null);
   const pttHoldingRef = useRef(false);
 
   const lk = useLiveKitRoom();
 
-  // Auto-join via invite link
+  // Tick every 30s to refresh expiry countdown
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Auto-join via legacy ?join= invite (still supported for logged-in users)
   useEffect(() => {
     if (!joinCode || !user || activeChannel) return;
     (async () => {
@@ -62,7 +92,6 @@ function VoicePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [joinCode, user]);
 
-  // Apply deafen by muting all remote audio elements
   useEffect(() => {
     if (typeof document === "undefined") return;
     document.querySelectorAll("audio").forEach((el) => {
@@ -70,24 +99,20 @@ function VoicePage() {
     });
   }, [isDeafened, lk.participants.length]);
 
-  // Push-to-talk: hold spacebar to talk while muted
+  // Push-to-talk
   useEffect(() => {
     if (!lk.isConnected || !lk.room) return;
 
     const isTypingTarget = (el: EventTarget | null) => {
       if (!(el instanceof HTMLElement)) return false;
       const tag = el.tagName;
-      return (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        el.isContentEditable
-      );
+      return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
     };
 
     const onDown = async (e: KeyboardEvent) => {
       if (e.code !== "Space" || e.repeat) return;
       if (isTypingTarget(e.target)) return;
-      if (!lk.isMuted) return; // PTT only matters when muted
+      if (!lk.isMuted) return;
       e.preventDefault();
       if (pttHoldingRef.current) return;
       pttHoldingRef.current = true;
@@ -153,25 +178,66 @@ function VoicePage() {
     else playUnmuteSound();
   };
 
-  const copyInviteLink = async () => {
+  const openInviteDialog = async () => {
     if (!activeChannel) return;
     if (activeChannel.created_by !== user?.id) {
-      toast.error("Only the channel creator can share the invite link");
+      toast.error("Only the channel creator can manage the invite link");
       return;
     }
-    const { data: code, error } = await supabase.rpc("get_channel_invite_code", {
+    setShowInvite(true);
+    const { data, error } = await supabase.rpc("get_voice_invite_info", {
       _channel_id: activeChannel.id,
     });
-    if (error || !code) {
-      toast.error("Could not load invite code");
+    if (error || !data || data.length === 0) {
+      toast.error("Could not load invite info");
       return;
     }
-    const link = `${window.location.origin}/voice-invite/${code}`;
+    setInviteCode(data[0].invite_code);
+    setInviteExpiresAt(data[0].invite_expires_at);
+  };
+
+  const regenInvite = async () => {
+    if (!activeChannel) return;
+    const { data, error } = await supabase.rpc("regen_voice_invite", {
+      _channel_id: activeChannel.id,
+    });
+    if (error || !data || data.length === 0) {
+      toast.error(error?.message ?? "Could not regenerate link");
+      return;
+    }
+    setInviteCode(data[0].invite_code);
+    setInviteExpiresAt(data[0].invite_expires_at);
+    toast.success("New invite link generated");
+  };
+
+  const copyInviteLink = () => {
+    if (!inviteCode) return;
+    const link = `${window.location.origin}/voice-invite/${inviteCode}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     toast.success("Invite link copied!");
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const performKick = async (p: VoiceParticipantInfo, ban: boolean) => {
+    if (!activeChannel) return;
+    try {
+      await kickVoiceParticipant({
+        data: {
+          channelId: activeChannel.id,
+          identity: p.identity,
+          displayName: p.name,
+          ban,
+        },
+      });
+      toast.success(ban ? `${p.name} banned` : `${p.name} kicked`);
+    } catch (err: any) {
+      toast.error(err?.message || "Could not kick participant");
+    }
+    setConfirmKick(null);
+  };
+
+  const isCreator = activeChannel?.created_by === user?.id;
 
   return (
     <div className="flex h-full">
@@ -210,27 +276,69 @@ function VoicePage() {
                     In voice — {lk.participants.length}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {lk.participants.map((p) => (
-                      <div
-                        key={p.identity}
-                        className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${
-                          p.isSpeaking ? "bg-primary/10 ring-1 ring-primary/40" : "bg-muted/40"
-                        }`}
-                      >
-                        <div className="relative">
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white text-sm font-medium">
-                            {p.name.charAt(0).toUpperCase()}
-                          </div>
-                          {p.isMuted && (
-                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive flex items-center justify-center ring-2 ring-background">
-                              <MicOff size={9} className="text-white" />
+                    {lk.participants.map((p) => {
+                      const card = (
+                        <div
+                          className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${
+                            p.isSpeaking ? "bg-primary/10 ring-1 ring-primary/40" : "bg-muted/40"
+                          }`}
+                        >
+                          <div className="relative">
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white text-sm font-medium">
+                              {p.name.charAt(0).toUpperCase()}
                             </div>
-                          )}
+                            {p.isMuted && (
+                              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive flex items-center justify-center ring-2 ring-background">
+                                <MicOff size={9} className="text-white" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm truncate block">{p.name}</span>
+                            {p.isGuest && (
+                              <span className="inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/15 text-primary font-semibold">
+                                Guest
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-sm truncate">{p.name}</span>
-                      </div>
-                    ))}
+                      );
+
+                      // Creator can right-click any non-local participant for kick/ban
+                      if (isCreator && !p.isLocal) {
+                        return (
+                          <ContextMenu key={p.identity}>
+                            <ContextMenuTrigger asChild>
+                              <div className="cursor-context-menu">{card}</div>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent>
+                              <ContextMenuItem
+                                onClick={() => setConfirmKick({ p, ban: false })}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <UserX size={14} className="mr-2" /> Kick {p.name}
+                              </ContextMenuItem>
+                              {p.isGuest && (
+                                <ContextMenuItem
+                                  onClick={() => setConfirmKick({ p, ban: true })}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Ban size={14} className="mr-2" /> Ban {p.name}
+                                </ContextMenuItem>
+                              )}
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        );
+                      }
+
+                      return <div key={p.identity}>{card}</div>;
+                    })}
                   </div>
+                  {isCreator && lk.participants.some((p) => !p.isLocal) && (
+                    <p className="text-[10px] text-muted-foreground/60 mt-3">
+                      Tip: right-click a participant to kick or ban them.
+                    </p>
+                  )}
                 </div>
               </>
             )}
@@ -259,13 +367,13 @@ function VoicePage() {
               </div>
 
               <div className="flex items-center gap-1">
-                {activeChannel.created_by === user?.id && (
+                {isCreator && (
                   <button
-                    onClick={copyInviteLink}
+                    onClick={openInviteDialog}
                     className="p-2.5 rounded-xl bg-muted/50 text-foreground hover:bg-muted transition-all"
-                    title="Copy invite link"
+                    title="Manage invite link"
                   >
-                    {copied ? <Check size={18} /> : <Copy size={18} />}
+                    <Link2 size={18} />
                   </button>
                 )}
                 <ScreenShareControls
@@ -309,6 +417,92 @@ function VoicePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Invite link manager */}
+      <Dialog open={showInvite} onOpenChange={setShowInvite}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Guest invite link</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Share this link to let anyone join the voice channel as a guest — no account needed.
+          </p>
+
+          {inviteCode ? (
+            <>
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-muted border border-border/40">
+                <input
+                  readOnly
+                  value={`${window.location.origin}/voice-invite/${inviteCode}`}
+                  className="flex-1 bg-transparent text-sm outline-none"
+                  onFocus={(e) => e.target.select()}
+                />
+                <button
+                  onClick={copyInviteLink}
+                  className="p-1.5 rounded-md hover:bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
+                  title="Copy link"
+                >
+                  {copied ? <Check size={16} /> : <Copy size={16} />}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock size={12} />
+                  {inviteExpiresAt ? formatRemaining(inviteExpiresAt) : "—"}
+                </span>
+                <button
+                  onClick={regenInvite}
+                  className="text-xs text-primary hover:text-primary/80 inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-primary/10 transition-colors"
+                >
+                  <RefreshCw size={12} /> Regenerate (24h)
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-muted-foreground py-4 text-center">Loading…</div>
+          )}
+
+          <DialogFooter>
+            <button
+              onClick={() => setShowInvite(false)}
+              className="px-4 py-1.5 rounded-lg text-sm text-muted-foreground hover:bg-muted"
+            >
+              Close
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Kick/ban confirm */}
+      <Dialog open={!!confirmKick} onOpenChange={(o) => !o && setConfirmKick(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmKick?.ban ? "Ban" : "Kick"} {confirmKick?.p.name}?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {confirmKick?.ban
+              ? `${confirmKick?.p.name} will be removed and won't be able to rejoin via the invite link with this name.`
+              : `${confirmKick?.p.name} will be removed from the channel. They can rejoin if they still have the invite link.`}
+          </p>
+          <DialogFooter>
+            <button
+              onClick={() => setConfirmKick(null)}
+              className="px-4 py-1.5 rounded-lg text-sm text-muted-foreground hover:bg-muted"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => confirmKick && performKick(confirmKick.p, confirmKick.ban)}
+              className="px-4 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium"
+            >
+              {confirmKick?.ban ? "Ban" : "Kick"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

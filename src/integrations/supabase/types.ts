@@ -355,6 +355,38 @@ export type Database = {
           },
         ]
       }
+      voice_channel_bans: {
+        Row: {
+          banned_by: string
+          banned_identity: string
+          channel_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          banned_by: string
+          banned_identity: string
+          channel_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          banned_by?: string
+          banned_identity?: string
+          channel_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_channel_bans_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "voice_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       voice_channels: {
         Row: {
           category_id: string | null
@@ -363,6 +395,7 @@ export type Database = {
           created_by: string
           id: string
           invite_code: string
+          invite_expires_at: string
           is_active: boolean
           max_participants: number
           name: string
@@ -375,6 +408,7 @@ export type Database = {
           created_by: string
           id?: string
           invite_code?: string
+          invite_expires_at?: string
           is_active?: boolean
           max_participants?: number
           name: string
@@ -387,6 +421,7 @@ export type Database = {
           created_by?: string
           id?: string
           invite_code?: string
+          invite_expires_at?: string
           is_active?: boolean
           max_participants?: number
           name?: string
@@ -440,7 +475,15 @@ export type Database = {
           channel_id: string
           channel_name: string
           channel_type: string
+          invite_expires_at: string
           is_active: boolean
+        }[]
+      }
+      get_voice_invite_info: {
+        Args: { _channel_id: string }
+        Returns: {
+          invite_code: string
+          invite_expires_at: string
         }[]
       }
       is_channel_member: {
@@ -450,6 +493,10 @@ export type Database = {
       is_folder_owner: { Args: { _folder_id: string }; Returns: boolean }
       is_folder_shared_with_me: {
         Args: { _folder_id: string }
+        Returns: boolean
+      }
+      is_voice_identity_banned: {
+        Args: { _channel_id: string; _identity: string }
         Returns: boolean
       }
       join_channel_by_invite: {
@@ -472,6 +519,13 @@ export type Database = {
         Returns: {
           expires_at: string
           token: string
+        }[]
+      }
+      regen_voice_invite: {
+        Args: { _channel_id: string }
+        Returns: {
+          invite_code: string
+          invite_expires_at: string
         }[]
       }
     }

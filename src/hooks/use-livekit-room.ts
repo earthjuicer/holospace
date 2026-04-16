@@ -28,6 +28,7 @@ export interface VoiceParticipantInfo {
   isMuted: boolean;
   isSpeaking: boolean;
   isScreenSharing: boolean;
+  isGuest: boolean;
 }
 
 export function useLiveKitRoom() {
@@ -53,6 +54,7 @@ export function useLiveKitRoom() {
         isMuted: micPub ? micPub.isMuted : true,
         isSpeaking: p.isSpeaking,
         isScreenSharing: !!screenPub && !screenPub.isMuted,
+        isGuest: p.identity.startsWith("guest-"),
       });
     };
     collect(r.localParticipant, true);
@@ -110,16 +112,6 @@ export function useLiveKitRoom() {
         newRoom
           .on(RoomEvent.ConnectionStateChanged, (state) => {
             setConnectionState(state);
-            const id = "lk-conn-status";
-            if (state === ConnectionState.Connecting) {
-              toast.loading("Connecting…", { id });
-            } else if (state === ConnectionState.Reconnecting) {
-              toast.loading("Reconnecting…", { id });
-            } else if (state === ConnectionState.Connected) {
-              toast.success("Connected", { id, duration: 1500 });
-            } else if (state === ConnectionState.Disconnected) {
-              toast.dismiss(id);
-            }
           })
           .on(RoomEvent.ParticipantConnected, () => {
             refreshParticipants(newRoom);

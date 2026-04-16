@@ -11,7 +11,12 @@ import {
 import { Mic, MicOff, Headphones, PhoneOff, Users, Volume2, LogIn } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { getLiveKitTokenForGuest } from "@/utils/livekit-guest.functions";
-import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
+import {
+  playJoinSound,
+  playLeaveSound,
+  playMuteSound,
+  playUnmuteSound,
+} from "@/lib/voice-sounds";
 
 export const Route = createFileRoute("/voice-invite/$code")({
   head: () => ({
@@ -25,6 +30,7 @@ interface ParticipantInfo {
   name: string;
   isMuted: boolean;
   isSpeaking: boolean;
+  isGuest: boolean;
 }
 
 function VoiceInvitePage() {
@@ -46,6 +52,7 @@ function VoiceInvitePage() {
         name: p.name || p.identity,
         isMuted: micPub ? micPub.isMuted : true,
         isSpeaking: p.isSpeaking,
+        isGuest: p.identity.startsWith("guest-"),
       });
     };
     collect(r.localParticipant);
@@ -60,7 +67,6 @@ function VoiceInvitePage() {
     };
   }, []);
 
-  // Apply deafen
   useEffect(() => {
     document.querySelectorAll("audio").forEach((el) => {
       (el as HTMLAudioElement).muted = isDeafened;
@@ -83,10 +89,21 @@ function VoiceInvitePage() {
       const id = "lk-conn-status";
       room
         .on(RoomEvent.ConnectionStateChanged, (state) => {
-          if (state === ConnectionState.Connecting) toast.loading("Connecting…", { id });
-          else if (state === ConnectionState.Reconnecting) toast.loading("Reconnecting…", { id });
-          else if (state === ConnectionState.Connected) toast.success("Connected", { id, duration: 1500 });
+          if (state === ConnectionState.Connecting)
+            toast.loading("Connecting…", { id });
+          else if (state === ConnectionState.Reconnecting)
+            toast.loading("Reconnecting…", { id });
+          else if (state === ConnectionState.Connected)
+            toast.success("Connected", { id, duration: 1500 });
           else if (state === ConnectionState.Disconnected) toast.dismiss(id);
+        })
+        .on(RoomEvent.Disconnected, (reason) => {
+          // Likely kicked
+          if (reason !== undefined) {
+            toast.error("You were removed from the channel");
+            setStage("name");
+            roomRef.current = null;
+          }
         })
         .on(RoomEvent.ParticipantConnected, () => refreshParticipants(room))
         .on(RoomEvent.ParticipantDisconnected, () => refreshParticipants(room))
@@ -226,7 +243,14 @@ function VoiceInvitePage() {
                           </div>
                         )}
                       </div>
-                      <span className="text-sm truncate">{p.name}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm truncate block">{p.name}</span>
+                        {p.isGuest && (
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                            Guest
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
