@@ -156,6 +156,28 @@ function FoldersPage() {
     if (data) setShares(data);
   };
 
+  const handleDropFiles = async (folderId: string, fileList: FileList) => {
+    if (!fileList.length) return;
+    setUploadingFolderId(folderId);
+    const files = Array.from(fileList);
+    let okCount = 0;
+    for (const file of files) {
+      try {
+        await uploadFileToFolder({ folderId, file });
+        okCount += 1;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Upload failed";
+        toast.error(`${file.name}: ${msg}`);
+      }
+    }
+    if (okCount > 0) {
+      toast.success(`Uploaded ${okCount} file${okCount === 1 ? "" : "s"}`);
+    }
+    setUploadingFolderId(null);
+    setDragOverFolderId(null);
+    fetchFolders();
+  };
+
   const createFolder = async () => {
     if (!newFolderName.trim() || !user) return;
     const { error } = await supabase.from("folders").insert({
