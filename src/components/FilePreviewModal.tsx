@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ZoomIn, ZoomOut, RotateCcw, Download, Loader2, Share2, Copy, Check } from "lucide-react";
+import { X, ZoomIn, ZoomOut, RotateCcw, Download, Loader2, Share2, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +23,10 @@ export interface PreviewFile {
 interface Props {
   file: PreviewFile | null;
   onClose: () => void;
+  /** Optional: pass the full list of files in the folder to enable prev/next navigation. */
+  siblings?: PreviewFile[];
+  /** Called when the user navigates to a sibling via arrows / keyboard. */
+  onNavigate?: (next: PreviewFile) => void;
 }
 
 const BUCKET = "folder-files";
@@ -30,7 +34,7 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 6;
 const ZOOM_STEP = 0.25;
 
-export function FilePreviewModal({ file, onClose }: Props) {
+export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -62,7 +66,30 @@ export function FilePreviewModal({ file, onClose }: Props) {
     };
   }, [file, onClose]);
 
-  // Close on Escape, zoom on +/-
+  // Compute previous/next siblings (if a list was provided).
+  const { prev, next, indexLabel } = useMemo(() => {
+    if (!file || !siblings || siblings.length < 2) {
+      return { prev: null as PreviewFile | null, next: null as PreviewFile | null, indexLabel: "" };
+    }
+    const idx = siblings.findIndex((s) => s.id === file.id);
+    if (idx === -1) {
+      return { prev: null as PreviewFile | null, next: null as PreviewFile | null, indexLabel: "" };
+    }
+    return {
+      prev: idx > 0 ? siblings[idx - 1] : null,
+      next: idx < siblings.length - 1 ? siblings[idx + 1] : null,
+      indexLabel: `${idx + 1} / ${siblings.length}`,
+    };
+  }, [file, siblings]);
+
+  const goPrev = () => {
+    if (prev && onNavigate) onNavigate(prev);
+  };
+  const goNext = () => {
+    if (next && onNavigate) onNavigate(next);
+  };
+
+  // Close on Escape, zoom on +/-, navigate with arrow keys.
   useEffect(() => {
     if (!file) return;
     const onKey = (e: KeyboardEvent) => {
@@ -70,10 +97,12 @@ export function FilePreviewModal({ file, onClose }: Props) {
       if (e.key === "+" || e.key === "=") setZoom((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP));
       if (e.key === "-" || e.key === "_") setZoom((z) => Math.max(MIN_ZOOM, z - ZOOM_STEP));
       if (e.key === "0") setZoom(1);
+      if (e.key === "ArrowLeft" && prev && onNavigate) onNavigate(prev);
+      if (e.key === "ArrowRight" && next && onNavigate) onNavigate(next);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [file, onClose]);
+  }, [file, onClose, prev, next, onNavigate]);
 
   const [copied, setCopied] = useState(false);
 
@@ -151,6 +180,7 @@ export function FilePreviewModal({ file, onClose }: Props) {
               <div className="text-[11px] text-muted-foreground">
                 {file.mime_type ?? "Unknown type"}
                 {canZoom && ` · ${Math.round(zoom * 100)}%`}
+                {indexLabel && ` · ${indexLabel}`}
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -235,12 +265,39 @@ export function FilePreviewModal({ file, onClose }: Props) {
 
           {/* Content */}
           <div
-            className="flex-1 overflow-auto flex items-center justify-center p-4"
+            className="flex-1 overflow-auto flex items-center justify-center p-4 relative"
             onClick={(e) => {
               // Click on backdrop (not on media) closes
               if (e.target === e.currentTarget) onClose();
             }}
           >
+            {/* Prev / Next navigation */}
+            {prev && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goPrev();
+                }}
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-background/80 hover:bg-background border border-border/40 text-foreground shadow-lg backdrop-blur transition-colors"
+                title="Previous (←)"
+                aria-label="Previous file"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
+            {next && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goNext();
+                }}
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-background/80 hover:bg-background border border-border/40 text-foreground shadow-lg backdrop-blur transition-colors"
+                title="Next (→)"
+                aria-label="Next file"
+              >
+                <ChevronRight size={20} />
+              </button>
+            )}
             {loading || !url ? (
               <Loader2 className="animate-spin text-primary" size={32} />
             ) : isImage ? (
