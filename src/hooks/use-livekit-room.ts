@@ -178,6 +178,12 @@ export function useLiveKitRoom() {
 
         await newRoom.connect(url, token);
         await newRoom.localParticipant.setMicrophoneEnabled(true);
+        // Required by some browsers (Safari, mobile Chrome) before remote audio plays.
+        try {
+          await newRoom.startAudio();
+        } catch {
+          /* user gesture wasn't enough — they may need to click again */
+        }
 
         roomRef.current = newRoom;
         setRoom(newRoom);
