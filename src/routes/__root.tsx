@@ -1,6 +1,8 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import appCss from "../styles.css?url";
 import { AppLayout } from "@/components/AppLayout";
+import { useAppStore } from "@/store/app-store";
 
 function NotFoundComponent() {
   return (
@@ -68,6 +70,21 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    useAppStore.persist.rehydrate();
+    setHydrated(true);
+  }, []);
+
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-muted-foreground text-sm">Loading…</div>
+      </div>
+    );
+  }
+
   return (
     <AppLayout>
       <Outlet />
