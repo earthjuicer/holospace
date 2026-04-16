@@ -398,8 +398,12 @@ export const useAppStore = create<AppState>()(
  */
 let currentUserScope: string | null = null;
 let unsubscribeSync: (() => void) | null = null;
+let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let lastBackendUpdatedAt: string | null = null;
+// Tracks the most recent push we initiated, so the realtime echo of our own
+// write doesn't trigger a redundant overwrite of local state.
+let lastPushedAt: number = 0;
 
 // Pieces of the store that are user-scoped and should sync to the backend.
 const SYNCED_KEYS = ['documents', 'columns', 'tasks', 'events', 'settings', 'onboardingComplete'] as const;
@@ -418,6 +422,7 @@ function takeSnapshot(s: AppState): SyncedSnapshot {
 
 async function pushToBackend(userId: string) {
   const snapshot = takeSnapshot(useAppStore.getState());
+  lastPushedAt = Date.now();
   // Cast through `any` because Supabase's generated jsonb type is overly
   // restrictive (Json) — we genuinely store a structured snapshot here.
   const { data, error } = await supabase
@@ -433,6 +438,21 @@ async function pushToBackend(userId: string) {
   }
 }
 
+/** Apply a backend snapshot to local state. Called on initial pull and on
+ *  realtime updates from other devices. */
+function applyBackendSnapshot(snapshot: Partial<SyncedSnapshot>, updatedAt: string | null) {
+  useAppStore.setState((s) => ({
+    ...s,
+    documents: snapshot.documents ?? s.documents,
+    columns: snapshot.columns ?? s.columns,
+    tasks: snapshot.tasks ?? s.tasks,
+    events: snapshot.events ?? s.events,
+    settings: { ...s.settings, ...(snapshot.settings ?? {}) },
+    onboardingComplete: snapshot.onboardingComplete ?? s.onboardingComplete,
+  }));
+  lastBackendUpdatedAt = updatedAt;
+}
+
 function schedulePush(userId: string) {
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
@@ -441,7 +461,7 @@ function schedulePush(userId: string) {
       // Network failures are non-fatal — local state remains and we'll retry
       // on the next change.
     });
-  }, 800);
+  }, 300);
 }
 
 export async function setUserScope(userId: string | null): Promise<void> {
@@ -453,6 +473,10 @@ export async function setUserScope(userId: string | null): Promise<void> {
   if (unsubscribeSync) {
     unsubscribeSync();
     unsubscribeSync = null;
+  }
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel);
+    realtimeChannel = null;
   }
   if (pushTimer) {
     clearTimeout(pushTimer);
@@ -475,17 +499,7 @@ export async function setUserScope(userId: string | null): Promise<void> {
 
       if (row?.data && Object.keys(row.data as object).length > 0) {
         // Backend wins on conflict — replace local with backend snapshot
-        const backend = row.data as unknown as Partial<SyncedSnapshot>;
-        useAppStore.setState((s) => ({
-          ...s,
-          documents: backend.documents ?? s.documents,
-          columns: backend.columns ?? s.columns,
-          tasks: backend.tasks ?? s.tasks,
-          events: backend.events ?? s.events,
-          settings: { ...s.settings, ...(backend.settings ?? {}) },
-          onboardingComplete: backend.onboardingComplete ?? s.onboardingComplete,
-        }));
-        lastBackendUpdatedAt = row.updated_at;
+        applyBackendSnapshot(row.data as unknown as Partial<SyncedSnapshot>, row.updated_at);
       } else {
         // No backend row yet — push the current (possibly seeded/local) state
         await pushToBackend(userId);
@@ -505,5 +519,30 @@ export async function setUserScope(userId: string | null): Promise<void> {
         schedulePush(userId);
       }
     });
+
+    // 4) Subscribe to backend changes (other devices / tabs) and pull them in
+    //    live. We ignore the echo of our own write by checking lastPushedAt.
+    realtimeChannel = supabase
+      .channel(`user-workspace-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_workspace',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          // Skip if this is the echo of a push we just made (within ~2s).
+          if (Date.now() - lastPushedAt < 2000) return;
+          const row = payload.new as { data?: unknown; updated_at?: string } | null;
+          if (!row?.data) return;
+          applyBackendSnapshot(
+            row.data as Partial<SyncedSnapshot>,
+            row.updated_at ?? null,
+          );
+        }
+      )
+      .subscribe();
   }
 }
