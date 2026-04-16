@@ -87,15 +87,46 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
       const { data, error } = await supabase.rpc("list_share_files", { _token: shareToken });
       if (!error && data) setFiles(data as FolderFile[]);
     } else {
+      // Raise the default 1000-row limit so big folders show every file.
       const { data } = await supabase
         .from("folder_files")
         .select("id, file_name, size_bytes, mime_type, storage_path, created_at")
         .eq("folder_id", folderId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(5000);
       if (data) setFiles(data);
     }
     setLoading(false);
   };
+
+  // Sign image thumbnails for grid view (10-min URLs).
+  useEffect(() => {
+    let cancelled = false;
+    const images = files.filter(
+      (f) => f.mime_type?.startsWith("image/") && !thumbs[f.id]
+    );
+    if (images.length === 0) return;
+    (async () => {
+      const entries = await Promise.all(
+        images.map(async (f) => {
+          const { data } = await supabase.storage
+            .from(BUCKET)
+            .createSignedUrl(f.storage_path, 600);
+          return [f.id, data?.signedUrl] as const;
+        })
+      );
+      if (cancelled) return;
+      setThumbs((prev) => {
+        const next = { ...prev };
+        for (const [id, url] of entries) if (url) next[id] = url;
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]);
 
   useEffect(() => {
     load();
