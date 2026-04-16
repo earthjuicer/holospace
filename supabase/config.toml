@@ -1,4 +1,4 @@
 project_id = "vdnmlcbcbknupducotlw"
 
 [functions.run-prompt]
-verify_jwt = false
+verify_jwt = true
