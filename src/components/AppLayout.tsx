@@ -18,8 +18,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [storeReady, setStoreReady] = useState(false);
 
   const isPublicRoute = PUBLIC_ROUTES.some((r) => location.pathname.startsWith(r));
+
+  // Swap the persisted store to the current user's bucket whenever auth
+  // changes. Each user (and signed-out anon) gets their own dashboard,
+  // documents, tasks, calendar, and settings on this device.
+  useEffect(() => {
+    if (loading) return;
+    let cancelled = false;
+    setStoreReady(false);
+    setUserScope(user?.id ?? null).then(() => {
+      if (!cancelled) setStoreReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user?.id]);
 
   useEffect(() => {
     const root = document.documentElement;
