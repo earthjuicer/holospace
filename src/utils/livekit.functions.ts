@@ -1,8 +1,23 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn, createMiddleware } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabase } from "@/integrations/supabase/client";
+
+// Client-side middleware that attaches the Supabase auth token as a header
+// before the server function is invoked. Required so the server-side
+// `requireSupabaseAuth` middleware can read the Authorization header.
+const attachSupabaseAuth = createMiddleware({ type: "function" }).client(
+  async ({ next }) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    return next({
+      sendContext: {},
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  }
+);
 
 export const getLiveKitToken = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([attachSupabaseAuth, requireSupabaseAuth])
   .inputValidator((data: { roomName: string; participantName: string }) => data)
   .handler(async ({ data, context }) => {
     const apiKey = process.env.LIVEKIT_API_KEY;
