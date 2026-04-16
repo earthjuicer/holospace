@@ -524,3 +524,149 @@ function VoicePage() {
     </div>
   );
 }
+
+interface ParticipantCardProps {
+  p: VoiceParticipantInfo;
+  level: number;
+  volume: number;
+  onVolumeChange: (v: number) => void;
+  isCreator: boolean;
+  canRing: boolean;
+  onRing: () => void;
+  onKick: () => void;
+  onBan: () => void;
+}
+
+/**
+ * Single participant tile. Renders avatar, mic-meter and (for remote
+ * participants) a volume popover that opens on tap, long-press, or right-click.
+ * Long-press is the mobile equivalent of right-click since touch devices have
+ * no native context menu.
+ */
+function ParticipantCard({
+  p,
+  level,
+  volume,
+  onVolumeChange,
+  isCreator,
+  canRing,
+  onRing,
+  onKick,
+  onBan,
+}: ParticipantCardProps) {
+  const [open, setOpen] = useState(false);
+  // Long-press explicitly opens the volume popover on mobile; useful when the
+  // browser's tap behavior gets eaten by scroll-momentum or other gestures.
+  const longPress = useLongPress(() => !p.isLocal && setOpen(true), 450);
+
+  const card = (
+    <div
+      className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${
+        p.isSpeaking ? "bg-primary/10" : "bg-muted/40"
+      }`}
+    >
+      <div className="relative">
+        {p.isSpeaking && !p.isMuted && (
+          <>
+            <span className="absolute inset-0 rounded-full ring-2 ring-primary animate-pulse" />
+            <span className="absolute -inset-1 rounded-full ring-2 ring-primary/40 animate-ping" />
+          </>
+        )}
+        <div className="relative w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white text-sm font-medium">
+          {p.name.charAt(0).toUpperCase()}
+        </div>
+        {p.isMuted && (
+          <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive flex items-center justify-center ring-2 ring-background z-10">
+            <MicOff size={9} className="text-white" />
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm truncate">{p.name}</span>
+          <MicLevelMeter level={level} isMuted={p.isMuted} className="shrink-0" />
+        </div>
+        {p.isGuest && (
+          <span className="inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/15 text-primary font-semibold">
+            Guest
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
+  if (p.isLocal) return <div>{card}</div>;
+
+  const withPopover = (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="text-left w-full select-none touch-manipulation"
+          onTouchStart={longPress.onTouchStart}
+          onTouchMove={longPress.onTouchMove}
+          onTouchEnd={longPress.onTouchEnd}
+          onTouchCancel={longPress.onTouchCancel}
+        >
+          {card}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-60 p-3" side="top">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium truncate">{p.name}</span>
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            {volume}%
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Volume1 size={14} className="text-muted-foreground shrink-0" />
+          <Slider
+            value={[volume]}
+            min={0}
+            max={200}
+            step={5}
+            onValueChange={([v]: number[]) => onVolumeChange(v)}
+          />
+          <Volume2 size={14} className="text-muted-foreground shrink-0" />
+        </div>
+        <p className="text-[10px] text-muted-foreground/70 mt-2">
+          0% mutes them just for you · 200% boosts. Long-press on mobile to reopen.
+        </p>
+      </PopoverContent>
+    </Popover>
+  );
+
+  if (isCreator || canRing) {
+    return (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div className="cursor-context-menu">{withPopover}</div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          {canRing && (
+            <ContextMenuItem onClick={onRing}>
+              <Bell size={14} className="mr-2" /> Ring {p.name}
+            </ContextMenuItem>
+          )}
+          {isCreator && (
+            <ContextMenuItem
+              onClick={onKick}
+              className="text-destructive focus:text-destructive"
+            >
+              <UserX size={14} className="mr-2" /> Kick {p.name}
+            </ContextMenuItem>
+          )}
+          {isCreator && p.isGuest && (
+            <ContextMenuItem
+              onClick={onBan}
+              className="text-destructive focus:text-destructive"
+            >
+              <Ban size={14} className="mr-2" /> Ban {p.name}
+            </ContextMenuItem>
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
+    );
+  }
+
+  return <div>{withPopover}</div>;
+}
