@@ -1,8 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useAppStore } from "@/store/app-store";
-import { User, Palette, Type, Lock, Trash2, Sun, Moon } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
+import { User, Palette, Type, Lock, Trash2, Sun, Moon, LogOut } from "lucide-react";
+import { toast } from "sonner";
 
 const ACCENT_COLORS = [
   { name: 'Purple', value: '#667eea' },
@@ -25,9 +28,11 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsPage() {
   const { settings, updateSettings } = useAppStore();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -37,6 +42,27 @@ function SettingsPage() {
       updateSettings({ avatar: ev.target?.result as string });
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleUpdatePassword = async () => {
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    setUpdatingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Password updated!");
+      setNewPassword('');
+    }
+    setUpdatingPassword(false);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate({ to: '/login' });
   };
 
   const handleDeleteAccount = () => {
@@ -90,12 +116,9 @@ function SettingsPage() {
               placeholder="Your name"
               className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
-            <input
-              value={settings.userEmail}
-              onChange={(e) => updateSettings({ userEmail: e.target.value })}
-              placeholder="Email"
-              className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-            />
+            <div className="text-sm text-muted-foreground px-1">
+              {user?.email}
+            </div>
           </div>
         </div>
       </motion.section>
@@ -199,23 +222,29 @@ function SettingsPage() {
         <div className="space-y-3 mb-4">
           <input
             type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Current password"
-            className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-          />
-          <input
-            type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="New password"
             className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
           />
-          <button className="pill-button gradient-accent text-white text-sm">
+          <button
+            onClick={handleUpdatePassword}
+            disabled={updatingPassword}
+            className="pill-button gradient-accent text-white text-sm disabled:opacity-50"
+          >
             Update Password
           </button>
         </div>
-        <div className="pt-4 border-t border-border/30">
+
+        <div className="pt-4 border-t border-border/30 space-y-3">
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <LogOut size={14} />
+            Sign out
+          </button>
+
           {showDeleteConfirm ? (
             <div className="flex items-center gap-3">
               <span className="text-sm text-destructive">Are you sure? This will reset all data.</span>
