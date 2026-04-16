@@ -422,13 +422,20 @@ function VoicePage() {
                       {copiedId === activeChannelData.id ? <Check size={18} /> : <Copy size={18} />}
                     </button>
                   )}
+                  <ScreenShareControls
+                    isSharing={screenShare.isSharing}
+                    stream={screenShare.stream}
+                    onStart={(opts) => screenShare.startShare(opts)}
+                    onStop={screenShare.stopShare}
+                  />
                   <button
-                    onClick={() => setIsMuted(!isMuted)}
+                    onClick={toggleMute}
                     className={`p-2.5 rounded-xl transition-all ${
                       isMuted
                         ? "bg-destructive/20 text-destructive"
                         : "bg-muted/50 text-foreground hover:bg-muted"
                     }`}
+                    title={isMuted ? "Unmute" : "Mute"}
                   >
                     {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
                   </button>
