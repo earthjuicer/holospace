@@ -315,19 +315,42 @@ function FolderDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <p className="text-sm text-muted-foreground flex-1 min-w-[200px]">
-                  {share
-                    ? "Link expired. Generate a new one."
-                    : "No active share link. Anyone with the link can view, download, and upload."}
-                </p>
+              <div
+                className={`flex items-start sm:items-center justify-between gap-3 flex-wrap ${
+                  shareExpired
+                    ? "rounded-lg border border-destructive/30 bg-destructive/5 p-3"
+                    : ""
+                }`}
+              >
+                <div className="flex items-start gap-2 flex-1 min-w-[200px]">
+                  {shareExpired && (
+                    <AlertTriangle size={16} className="text-destructive shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-0.5">
+                    <p className={`text-sm ${shareExpired ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                      {shareExpired
+                        ? "Your share link has expired"
+                        : "No active share link"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {shareExpired
+                        ? "Anyone using the old link will see an error. Generate a new one to keep sharing."
+                        : "Anyone with the link can view, download, and upload."}
+                    </p>
+                  </div>
+                </div>
                 <div className="flex items-center gap-0">
                   <button
                     onClick={() => generateOrRegen(expiry)}
                     disabled={generating}
-                    className="px-4 py-2 rounded-l-lg gradient-accent text-white text-sm font-medium whitespace-nowrap disabled:opacity-60"
+                    className="px-4 py-2 rounded-l-lg gradient-accent text-white text-sm font-medium whitespace-nowrap disabled:opacity-60 flex items-center gap-1.5"
                   >
-                    {generating ? "Generating…" : `Generate (${EXPIRY_OPTIONS.find(o => o.value === expiry)?.label})`}
+                    {shareExpired && !generating && <RefreshCw size={13} />}
+                    {generating
+                      ? "Generating…"
+                      : shareExpired
+                        ? `Regenerate (${EXPIRY_OPTIONS.find(o => o.value === expiry)?.label})`
+                        : `Generate (${EXPIRY_OPTIONS.find(o => o.value === expiry)?.label})`}
                   </button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
