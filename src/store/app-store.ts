@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { supabase } from '@/integrations/supabase/client';
 
 // SSR-safe storage: returns a no-op storage on the server, real localStorage in the browser
 const ssrSafeStorage = () => {
@@ -387,17 +388,122 @@ export const useAppStore = create<AppState>()(
 
 /**
  * Scope the persisted store to a specific user (or null for signed-out).
- * Each user gets their own localStorage bucket so dashboards, docs, tasks,
- * etc. don't leak across accounts on the same device.
+ *
+ * Flow on sign-in:
+ *  1. Rehydrate the per-user localStorage bucket (instant UX).
+ *  2. Pull the user's workspace from the backend.
+ *  3. Merge: backend wins on conflict (its updated_at is newer or equal),
+ *     otherwise push local up. This way data follows users across devices.
+ *  4. Subscribe future state changes to push to the backend (debounced).
  */
 let currentUserScope: string | null = null;
+let unsubscribeSync: (() => void) | null = null;
+let pushTimer: ReturnType<typeof setTimeout> | null = null;
+let lastBackendUpdatedAt: string | null = null;
+
+// Pieces of the store that are user-scoped and should sync to the backend.
+const SYNCED_KEYS = ['documents', 'columns', 'tasks', 'events', 'settings', 'onboardingComplete'] as const;
+type SyncedSnapshot = Pick<AppState, typeof SYNCED_KEYS[number]>;
+
+function takeSnapshot(s: AppState): SyncedSnapshot {
+  return {
+    documents: s.documents,
+    columns: s.columns,
+    tasks: s.tasks,
+    events: s.events,
+    settings: s.settings,
+    onboardingComplete: s.onboardingComplete,
+  };
+}
+
+async function pushToBackend(userId: string) {
+  const snapshot = takeSnapshot(useAppStore.getState());
+  // Cast through `any` because Supabase's generated jsonb type is overly
+  // restrictive (Json) — we genuinely store a structured snapshot here.
+  const { data, error } = await supabase
+    .from('user_workspace')
+    .upsert(
+      [{ user_id: userId, data: snapshot as any }],
+      { onConflict: 'user_id' }
+    )
+    .select('updated_at')
+    .maybeSingle();
+  if (!error && data?.updated_at) {
+    lastBackendUpdatedAt = data.updated_at;
+  }
+}
+
+function schedulePush(userId: string) {
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    pushTimer = null;
+    pushToBackend(userId).catch(() => {
+      // Network failures are non-fatal — local state remains and we'll retry
+      // on the next change.
+    });
+  }, 800);
+}
+
 export async function setUserScope(userId: string | null): Promise<void> {
   const next = userId ? `notion-app-storage:${userId}` : 'notion-app-storage:anon';
   if (currentUserScope === next) return;
   currentUserScope = next;
 
-  // Point persist middleware at the per-user storage key, then rehydrate
-  // from that bucket. If nothing is saved yet we keep the seeded defaults.
+  // Tear down any previous sync subscription
+  if (unsubscribeSync) {
+    unsubscribeSync();
+    unsubscribeSync = null;
+  }
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+  lastBackendUpdatedAt = null;
+
+  // 1) Point persist middleware at the per-user storage bucket and rehydrate
   useAppStore.persist.setOptions({ name: next });
   await useAppStore.persist.rehydrate();
+
+  // 2) For signed-in users, pull the backend snapshot and reconcile
+  if (userId) {
+    try {
+      const { data: row } = await supabase
+        .from('user_workspace')
+        .select('data, updated_at')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (row?.data && Object.keys(row.data as object).length > 0) {
+        // Backend wins on conflict — replace local with backend snapshot
+        const backend = row.data as unknown as Partial<SyncedSnapshot>;
+        useAppStore.setState((s) => ({
+          ...s,
+          documents: backend.documents ?? s.documents,
+          columns: backend.columns ?? s.columns,
+          tasks: backend.tasks ?? s.tasks,
+          events: backend.events ?? s.events,
+          settings: { ...s.settings, ...(backend.settings ?? {}) },
+          onboardingComplete: backend.onboardingComplete ?? s.onboardingComplete,
+        }));
+        lastBackendUpdatedAt = row.updated_at;
+      } else {
+        // No backend row yet — push the current (possibly seeded/local) state
+        await pushToBackend(userId);
+      }
+    } catch {
+      // If the network is down, we keep local state; sync resumes on next change.
+    }
+
+    // 3) Subscribe to future changes and push them to the backend (debounced)
+    let prev = takeSnapshot(useAppStore.getState());
+    unsubscribeSync = useAppStore.subscribe((state) => {
+      const next = takeSnapshot(state);
+      // Cheap shallow check on each synced slice
+      const changed = SYNCED_KEYS.some((k) => prev[k] !== next[k]);
+      if (changed) {
+        prev = next;
+        schedulePush(userId);
+      }
+    });
+  }
 }
