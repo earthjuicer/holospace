@@ -23,7 +23,6 @@ interface Folder {
   name: string;
   icon: string;
   owner_id: string;
-  is_private: boolean;
   created_at: string;
 }
 
