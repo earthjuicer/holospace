@@ -165,9 +165,44 @@ function FoldersPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "folder_shares" },
-        () => {
+        (payload) => {
           schedule(fetchFolders);
           schedule(fetchShares);
+
+          // Toast the recipient when a NEW share lands for them. We look up
+          // the folder name + owner display name so the message is meaningful
+          // ("Alice shared 'Designs' with you") rather than a generic ping.
+          if (payload.eventType !== "INSERT") return;
+          const row = payload.new as {
+            folder_id: string;
+            shared_with_user_id: string;
+          };
+          if (row.shared_with_user_id !== user.id) return;
+
+          (async () => {
+            const { data: folder } = await supabase
+              .from("folders")
+              .select("name, icon, owner_id")
+              .eq("id", row.folder_id)
+              .maybeSingle();
+            if (!folder) return;
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("display_name, username")
+              .eq("user_id", folder.owner_id)
+              .maybeSingle();
+            const who =
+              profile?.display_name || profile?.username || "Someone";
+            toast.success(`${who} shared a folder with you`, {
+              description: `${folder.icon || "📁"} ${folder.name}`,
+              action: {
+                label: "Open",
+                onClick: () => {
+                  window.location.href = `/folders/${row.folder_id}`;
+                },
+              },
+            });
+          })();
         }
       )
       .subscribe();
