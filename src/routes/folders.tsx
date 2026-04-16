@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe,
+  FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
