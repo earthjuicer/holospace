@@ -67,7 +67,10 @@ function FoldersPage() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [shares, setShares] = useState<FolderShare[]>([]);
   const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
-  const [latestFiles, setLatestFiles] = useState<Record<string, LatestFile>>({});
+  // All files per folder (most-recent first), used for the chip's prev/next nav.
+  const [folderFiles, setFolderFiles] = useState<Record<string, LatestFile[]>>({});
+  // Per-folder index into folderFiles[folderId] (0 = newest).
+  const [chipIndex, setChipIndex] = useState<Record<string, number>>({});
   // Folder IDs that currently have files being dropped onto them.
   const [uploadingFolderId, setUploadingFolderId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
