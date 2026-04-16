@@ -136,10 +136,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
-    console.error("run-prompt error:", e);
-    return jsonResponse(
-      { error: e instanceof Error ? e.message : "Unknown error" },
-      500,
-    );
+    console.error("run-prompt unhandled error:", e);
+    return jsonResponse({ error: "Internal server error" }, 500);
   }
 });
