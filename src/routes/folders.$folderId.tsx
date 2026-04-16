@@ -5,8 +5,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { FolderFiles } from "@/components/FolderFiles";
 import { FolderMemberPanel } from "@/components/FolderMemberPanel";
-import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, Link2Off } from "lucide-react";
+import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, Link2Off, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const EXPIRY_OPTIONS = [
+  { label: "1 hour", value: "1h", interval: "1 hour", short: "1h" },
+  { label: "24 hours", value: "24h", interval: "24 hours", short: "24h" },
+  { label: "7 days", value: "7d", interval: "7 days", short: "7d" },
+  { label: "Never", value: "never", interval: "100 years", short: "∞" },
+] as const;
+
+type ExpiryValue = (typeof EXPIRY_OPTIONS)[number]["value"];
 
 export const Route = createFileRoute("/folders/$folderId")({
   validateSearch: (search: Record<string, unknown>) => ({
