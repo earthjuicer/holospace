@@ -72,6 +72,9 @@ function FoldersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
   const [sharingFolderId, setSharingFolderId] = useState<string | null>(null);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
+  const [sharingBusyFolderId, setSharingBusyFolderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -192,35 +195,50 @@ function FoldersPage() {
   };
 
   const handleDropFiles = async (folderId: string, fileList: FileList) => {
-    if (!fileList.length) return;
+    if (!fileList.length) {
+      toast.error("Choose at least one file to upload");
+      return;
+    }
     setUploadingFolderId(folderId);
     const files = Array.from(fileList);
     let okCount = 0;
-    for (const file of files) {
-      try {
-        await uploadFileToFolder({ folderId, file });
-        okCount += 1;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "Upload failed";
-        toast.error(`${file.name}: ${msg}`);
+    try {
+      for (const file of files) {
+        try {
+          await uploadFileToFolder({ folderId, file });
+          okCount += 1;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Upload failed";
+          toast.error(`${file.name}: ${msg}`);
+        }
       }
+      if (okCount > 0) {
+        toast.success(`Uploaded ${okCount} file${okCount === 1 ? "" : "s"}`);
+      }
+      await fetchFolders();
+    } finally {
+      setUploadingFolderId(null);
+      setDragOverFolderId(null);
     }
-    if (okCount > 0) {
-      toast.success(`Uploaded ${okCount} file${okCount === 1 ? "" : "s"}`);
-    }
-    setUploadingFolderId(null);
-    setDragOverFolderId(null);
-    fetchFolders();
   };
 
   const createFolder = async () => {
-    if (!newFolderName.trim() || !user) return;
+    if (!user) {
+      toast.error("Please sign in first");
+      return;
+    }
+    if (!newFolderName.trim()) {
+      toast.error("Enter a folder name");
+      return;
+    }
+    setCreatingFolder(true);
     const { error } = await supabase.from("folders").insert({
       name: newFolderName.trim(),
       owner_id: user.id,
     });
+    setCreatingFolder(false);
     if (error) {
-      toast.error("Failed to create folder");
+      toast.error(error.message || "Failed to create folder");
     } else {
       setNewFolderName("");
       setShowCreate(false);
@@ -230,9 +248,11 @@ function FoldersPage() {
   };
 
   const deleteFolder = async (id: string) => {
+    setDeletingFolderId(id);
     const { error } = await supabase.from("folders").delete().eq("id", id);
+    setDeletingFolderId(null);
     if (error) {
-      toast.error("Failed to delete folder");
+      toast.error(error.message || "Failed to delete folder");
     } else {
       fetchFolders();
       toast.success("Folder deleted");
@@ -240,14 +260,24 @@ function FoldersPage() {
   };
 
   const shareFolder = async (folderId: string) => {
-    if (!shareEmail.trim()) return;
-    // Look up user by email from profiles
-    const { data: profiles } = await supabase
+    if (!shareEmail.trim()) {
+      toast.error("Enter a name to share with");
+      return;
+    }
+    setSharingBusyFolderId(folderId);
+    const { data: profiles, error: lookupError } = await supabase
       .from("profiles")
       .select("user_id")
-      .ilike("display_name", `%${shareEmail}%`);
+      .ilike("display_name", `%${shareEmail.trim()}%`);
+
+    if (lookupError) {
+      setSharingBusyFolderId(null);
+      toast.error(lookupError.message || "Could not search users");
+      return;
+    }
 
     if (!profiles || profiles.length === 0) {
+      setSharingBusyFolderId(null);
       toast.error("User not found");
       return;
     }
@@ -257,9 +287,10 @@ function FoldersPage() {
       shared_with_user_id: profiles[0].user_id,
       role: "viewer",
     });
+    setSharingBusyFolderId(null);
 
     if (error) {
-      toast.error(error.message.includes("duplicate") ? "Already shared with this user" : "Failed to share");
+      toast.error(error.message.includes("duplicate") ? "Already shared with this user" : error.message || "Failed to share");
     } else {
       setShareEmail("");
       setSharingFolderId(null);
@@ -291,6 +322,7 @@ function FoldersPage() {
             </p>
           </div>
           <button
+            type="button"
             onClick={() => setShowCreate(!showCreate)}
             className="pill-button gradient-accent text-white flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
           >
@@ -317,10 +349,12 @@ function FoldersPage() {
                   onKeyDown={(e) => e.key === "Enter" && createFolder()}
                 />
                 <button
+                  type="button"
                   onClick={createFolder}
-                  className="px-4 py-1.5 rounded-lg gradient-accent text-white text-sm font-medium"
+                  disabled={creatingFolder}
+                  className="px-4 py-1.5 rounded-lg gradient-accent text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Create
+                  {creatingFolder ? "Creating…" : "Create"}
                 </button>
               </div>
             </motion.div>
@@ -407,14 +441,10 @@ function FoldersPage() {
                     </div>
                   </Link>
                   <div className="flex items-center gap-1 shrink-0 opacity-100">
-                    {/* Hidden file input — clicking the Upload button below
-                        triggers it within the same user gesture so the OS
-                        file picker actually opens (browsers block delayed
-                        programmatic .click() calls). */}
                     <input
                       type="file"
                       multiple
-                      className="hidden"
+                      className="sr-only"
                       id={`upload-input-${folder.id}`}
                       onChange={(e) => {
                         if (e.target.files?.length) {
@@ -423,31 +453,37 @@ function FoldersPage() {
                         }
                       }}
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const input = document.getElementById(
-                          `upload-input-${folder.id}`
-                        ) as HTMLInputElement | null;
-                        input?.click();
-                      }}
-                      className="inline-flex items-center gap-1 rounded-lg border border-border/40 bg-muted/40 px-2.5 py-2 text-xs font-medium text-primary hover:bg-primary/10"
+                    <label
+                      htmlFor={`upload-input-${folder.id}`}
+                      className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-border/40 bg-muted/40 px-2.5 py-2 text-xs font-medium text-primary hover:bg-primary/10"
                       title="Upload files to this folder"
                       aria-label="Upload files to this folder"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <Upload size={14} />
                       <span className="hidden sm:inline">Upload</span>
-                    </button>
+                    </label>
                     <button
-                      onClick={() => setSharingFolderId(sharingFolderId === folder.id ? null : folder.id)}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSharingFolderId(sharingFolderId === folder.id ? null : folder.id);
+                      }}
                       className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
                       title="Share folder"
                     >
                       <Share2 size={14} />
                     </button>
                     <button
-                      onClick={() => deleteFolder(folder.id)}
-                      className="p-2 rounded-lg hover:bg-destructive/10 text-destructive"
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteFolder(folder.id);
+                      }}
+                      disabled={deletingFolderId === folder.id}
+                      className="p-2 rounded-lg hover:bg-destructive/10 text-destructive disabled:opacity-60 disabled:cursor-not-allowed"
                       title="Delete folder"
                     >
                       <Trash2 size={14} />
@@ -500,10 +536,12 @@ function FoldersPage() {
                           onKeyDown={(e) => e.key === "Enter" && shareFolder(folder.id)}
                         />
                         <button
+                          type="button"
                           onClick={() => shareFolder(folder.id)}
-                          className="px-3 py-1.5 rounded-lg gradient-accent text-white text-xs font-medium"
+                          disabled={sharingBusyFolderId === folder.id}
+                          className="px-3 py-1.5 rounded-lg gradient-accent text-white text-xs font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                          Share
+                          {sharingBusyFolderId === folder.id ? "Sharing…" : "Share"}
                         </button>
                       </div>
                     </motion.div>
