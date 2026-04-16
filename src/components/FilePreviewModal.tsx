@@ -45,6 +45,8 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
   const [copied, setCopied] = useState(false);
   // Visual feedback while swiping (shifts the media + dims the off-screen direction).
   const [swipeDx, setSwipeDx] = useState(0);
+  // One-time pulse hint on the prev/next arrows so first-time users notice them.
+  const [showNavHint, setShowNavHint] = useState(false);
 
   useEffect(() => {
     if (!file) {
