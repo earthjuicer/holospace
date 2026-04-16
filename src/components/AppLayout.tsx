@@ -9,6 +9,8 @@ import { MobileHeader } from './MobileHeader';
 import { SearchPalette } from './SearchPalette';
 import { Onboarding } from './Onboarding';
 import { IncomingRing } from './IncomingRing';
+import { VoiceStatusBar } from './VoiceStatusBar';
+import { VoiceRoomProvider } from '@/hooks/voice-room-context';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Toaster } from 'sonner';
 
