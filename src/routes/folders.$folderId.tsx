@@ -61,6 +61,8 @@ function FolderDetailPage() {
   const [folder, setFolder] = useState<Folder | null>(null);
   const [share, setShare] = useState<Share | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expiry, setExpiry] = useState<ExpiryValue>("24h");
+  const [generating, setGenerating] = useState(false);
   const [, setTick] = useState(0);
 
   useEffect(() => {
