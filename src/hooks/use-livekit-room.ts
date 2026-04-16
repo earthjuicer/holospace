@@ -41,6 +41,10 @@ export function useLiveKitRoom() {
   const [screenShares, setScreenShares] = useState<ScreenShareTrackInfo[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  // Continuous audio levels (0..1) per participant identity. Polled at ~10Hz
+  // from LiveKit's Participant.audioLevel so the UI can render a live mic
+  // meter for every speaker — useful for "who is actually transmitting?".
+  const [audioLevels, setAudioLevels] = useState<Record<string, number>>({});
   // Mobile browsers (especially iOS Safari) often block autoplay until the
   // user taps after the track is attached. UI can show a "Tap to enable audio"
   // prompt + call unlockAudio() from a click handler.
