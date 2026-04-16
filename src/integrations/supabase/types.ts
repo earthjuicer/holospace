@@ -266,6 +266,11 @@ export type Database = {
         Args: { _channel_id: string; _user_id: string }
         Returns: boolean
       }
+      is_folder_owner: { Args: { _folder_id: string }; Returns: boolean }
+      is_folder_shared_with_me: {
+        Args: { _folder_id: string }
+        Returns: boolean
+      }
       join_channel_by_invite: {
         Args: { _invite_code: string }
         Returns: string
