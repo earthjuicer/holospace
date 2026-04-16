@@ -78,8 +78,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Not logged in — show nothing while redirecting
-  if (!user) {
+  // Not logged in, or store still rehydrating into the user's bucket — show spinner
+  if (!user || !storeReady) {
     return (
       <div className="flex h-[100dvh] w-full items-center justify-center bg-background">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
