@@ -1,10 +1,19 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import DOMPurify from 'dompurify';
 import { useAppStore, type Block, type Doc } from '@/store/app-store';
 import {
   Type, Heading1, Heading2, Heading3, List, ListOrdered, Quote,
   Code, Minus, ChevronRight, Bold, Italic, Underline, Save,
 } from 'lucide-react';
+
+const SANITIZE_CONFIG = {
+  ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'a', 'br', 'span', 'code'],
+  ALLOWED_ATTR: ['href', 'target', 'rel'],
+  ALLOW_DATA_ATTR: false,
+};
+
+const sanitize = (html: string) => DOMPurify.sanitize(html, SANITIZE_CONFIG);
 
 const BLOCK_TYPES = [
   { type: 'paragraph', label: 'Text', icon: Type, description: 'Plain text' },
@@ -115,7 +124,7 @@ export function BlockEditor({ doc }: BlockEditorProps) {
   const handleBlockInput = useCallback(
     (block: Block, e: React.FormEvent) => {
       const el = e.currentTarget as HTMLElement;
-      const content = el.innerHTML;
+      const content = sanitize(el.innerHTML);
 
       // Detect slash command
       if (el.textContent === '/') {
@@ -198,7 +207,7 @@ export function BlockEditor({ doc }: BlockEditorProps) {
             }}
             contentEditable
             suppressContentEditableWarning
-            dangerouslySetInnerHTML={{ __html: block.content }}
+            dangerouslySetInnerHTML={{ __html: sanitize(block.content) }}
             onInput={(e) => handleBlockInput(block, e)}
             onKeyDown={(e) => handleBlockKeyDown(e, block, index)}
             data-placeholder={
