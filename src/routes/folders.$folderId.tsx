@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { FolderFiles } from "@/components/FolderFiles";
+import { FolderMemberPanel } from "@/components/FolderMemberPanel";
 import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, Link2Off } from "lucide-react";
 import { toast } from "sonner";
 
@@ -261,6 +262,8 @@ function FolderDetailPage() {
             )}
           </div>
         )}
+
+        {isOwner && <FolderMemberPanel folderId={folderId} ownerId={folder.owner_id} />}
 
         <FolderFiles folderId={folderId} canDelete={isOwner} autoOpenUpload={upload === 1} />
       </motion.div>
