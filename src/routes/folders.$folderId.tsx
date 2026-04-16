@@ -48,9 +48,17 @@ interface Share {
 function formatRemaining(expiresAt: string) {
   const ms = new Date(expiresAt).getTime() - Date.now();
   if (ms <= 0) return "Expired";
+  // Treat anything beyond ~10 years as "never expires" (for the "Never" preset).
+  if (ms > 10 * 365 * 24 * 3600 * 1000) return "Never expires";
+  const days = Math.floor(ms / (24 * 3600000));
+  if (days >= 1) {
+    const remH = Math.floor((ms % (24 * 3600000)) / 3600000);
+    return remH > 0 ? `${days}d ${remH}h left` : `${days}d left`;
+  }
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
-  return `${h}h ${m}m left`;
+  if (h >= 1) return `${h}h ${m}m left`;
+  return `${m}m left`;
 }
 
 function FolderDetailPage() {
