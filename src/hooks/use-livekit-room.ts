@@ -121,11 +121,22 @@ export function useLiveKitRoom() {
             refreshParticipants(newRoom);
             refreshScreenShares(newRoom);
           })
-          .on(RoomEvent.TrackSubscribed, (_track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
+          .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
+            // Attach remote audio so participants can actually hear each other.
+            // LiveKit does NOT auto-play remote audio — we must attach it to a DOM element.
+            if (track.kind === Track.Kind.Audio) {
+              const el = (track as RemoteAudioTrack).attach();
+              el.setAttribute("data-lk-audio", "1");
+              el.style.display = "none";
+              document.body.appendChild(el);
+            }
             refreshScreenShares(newRoom);
             refreshParticipants(newRoom);
           })
-          .on(RoomEvent.TrackUnsubscribed, () => {
+          .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+            if (track.kind === Track.Kind.Audio) {
+              (track as RemoteAudioTrack).detach().forEach((el) => el.remove());
+            }
             refreshScreenShares(newRoom);
             refreshParticipants(newRoom);
           })
