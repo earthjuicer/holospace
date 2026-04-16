@@ -5,8 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
   FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe, Upload,
+  File as FileIcon, Image as ImageIcon, Video, Music, FileText, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadFileToFolder } from "@/lib/folder-upload";
 
 export const Route = createFileRoute("/folders")({
   head: () => ({
@@ -39,11 +41,33 @@ function formatItemCount(count: number) {
   return `${count} items`;
 }
 
+interface LatestFile {
+  id: string;
+  file_name: string;
+  mime_type: string | null;
+  storage_path: string;
+  /** Signed URL for image previews; only set when mime starts with image/. */
+  thumbUrl?: string;
+}
+
+function fileTypeIcon(mime: string | null) {
+  if (!mime) return FileIcon;
+  if (mime.startsWith("image/")) return ImageIcon;
+  if (mime.startsWith("video/")) return Video;
+  if (mime.startsWith("audio/")) return Music;
+  if (mime.startsWith("text/") || mime.includes("pdf")) return FileText;
+  return FileIcon;
+}
+
 function FoldersPage() {
   const { user } = useAuth();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [shares, setShares] = useState<FolderShare[]>([]);
   const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
+  const [latestFiles, setLatestFiles] = useState<Record<string, LatestFile>>({});
+  // Folder IDs that currently have files being dropped onto them.
+  const [uploadingFolderId, setUploadingFolderId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
@@ -68,10 +92,13 @@ function FoldersPage() {
 
     if (data.length === 0) {
       setFileCounts({});
+      setLatestFiles({});
       return;
     }
 
     const folderIds = data.map((folder) => folder.id);
+
+    // Counts (cheap, used for the "N items" label)
     const { data: fileRows } = await supabase
       .from("folder_files")
       .select("folder_id")
@@ -87,11 +114,68 @@ function FoldersPage() {
     });
 
     setFileCounts(counts);
+
+    // Latest file per folder for the preview chip on each card.
+    const { data: latestRows } = await supabase
+      .from("folder_files")
+      .select("id, folder_id, file_name, mime_type, storage_path, created_at")
+      .in("folder_id", folderIds)
+      .order("created_at", { ascending: false });
+
+    const seen: Record<string, LatestFile> = {};
+    latestRows?.forEach((row) => {
+      if (seen[row.folder_id]) return;
+      seen[row.folder_id] = {
+        id: row.id,
+        file_name: row.file_name,
+        mime_type: row.mime_type,
+        storage_path: row.storage_path,
+      };
+    });
+
+    // Sign image previews so we can show a real thumbnail (10 min URL).
+    const imageEntries = Object.entries(seen).filter(([, f]) =>
+      f.mime_type?.startsWith("image/")
+    );
+    await Promise.all(
+      imageEntries.map(async ([folderId, file]) => {
+        const { data: signed } = await supabase.storage
+          .from("folder-files")
+          .createSignedUrl(file.storage_path, 600);
+        if (signed?.signedUrl) {
+          seen[folderId] = { ...file, thumbUrl: signed.signedUrl };
+        }
+      })
+    );
+
+    setLatestFiles(seen);
   };
 
   const fetchShares = async () => {
     const { data } = await supabase.from("folder_shares").select("*");
     if (data) setShares(data);
+  };
+
+  const handleDropFiles = async (folderId: string, fileList: FileList) => {
+    if (!fileList.length) return;
+    setUploadingFolderId(folderId);
+    const files = Array.from(fileList);
+    let okCount = 0;
+    for (const file of files) {
+      try {
+        await uploadFileToFolder({ folderId, file });
+        okCount += 1;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Upload failed";
+        toast.error(`${file.name}: ${msg}`);
+      }
+    }
+    if (okCount > 0) {
+      toast.success(`Uploaded ${okCount} file${okCount === 1 ? "" : "s"}`);
+    }
+    setUploadingFolderId(null);
+    setDragOverFolderId(null);
+    fetchFolders();
   };
 
   const createFolder = async () => {
@@ -213,95 +297,166 @@ function FoldersPage() {
           <Lock size={14} /> My Folders
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
-          {myFolders.map((folder, i) => (
-            <motion.div
-              key={folder.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              className="glass p-4 group"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <Link
-                  to="/folders/$folderId"
-                  params={{ folderId: folder.id }}
-                  className="flex items-center gap-3 flex-1 min-w-0"
-                >
-                  <span className="text-2xl">{folder.icon}</span>
-                  <div className="min-w-0">
-                    <div className="font-medium text-foreground truncate">{folder.name}</div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1">
-                      <span>{formatItemCount(fileCounts[folder.id] ?? 0)}</span>
-                      <span>•</span>
-                      {folder.owner_id === user?.id ? (
+          {myFolders.map((folder, i) => {
+            const latest = latestFiles[folder.id];
+            const LatestIcon = latest ? fileTypeIcon(latest.mime_type) : null;
+            const isDraggingOver = dragOverFolderId === folder.id;
+            const isUploading = uploadingFolderId === folder.id;
+            return (
+              <motion.div
+                key={folder.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                onDragOver={(e) => {
+                  if (!e.dataTransfer.types.includes("Files")) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                  if (dragOverFolderId !== folder.id) setDragOverFolderId(folder.id);
+                }}
+                onDragLeave={(e) => {
+                  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                  setDragOverFolderId((cur) => (cur === folder.id ? null : cur));
+                }}
+                onDrop={(e) => {
+                  if (!e.dataTransfer.files.length) return;
+                  e.preventDefault();
+                  handleDropFiles(folder.id, e.dataTransfer.files);
+                }}
+                className={`glass p-4 group relative transition-all ${
+                  isDraggingOver
+                    ? "ring-2 ring-primary/60 border-primary/40 bg-primary/5"
+                    : ""
+                }`}
+              >
+                {(isDraggingOver || isUploading) && (
+                  <div className="absolute inset-0 z-10 rounded-lg bg-primary/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/90 border border-border/50 shadow-sm text-xs font-medium text-foreground">
+                      {isUploading ? (
                         <>
-                          <Globe size={10} /> Owner
+                          <Loader2 size={14} className="animate-spin text-primary" />
+                          Uploading…
                         </>
                       ) : (
                         <>
-                          <Lock size={10} /> Shared with you
+                          <Upload size={14} className="text-primary" />
+                          Drop to upload to {folder.name}
                         </>
                       )}
                     </div>
                   </div>
-                </Link>
-                <div className="flex items-center gap-1 shrink-0 opacity-100">
+                )}
+
+                <div className="flex items-start justify-between gap-3">
                   <Link
                     to="/folders/$folderId"
                     params={{ folderId: folder.id }}
-                    search={{ upload: 1 }}
-                    className="inline-flex items-center gap-1 rounded-lg border border-border/40 bg-muted/40 px-2.5 py-2 text-xs font-medium text-primary hover:bg-primary/10"
-                    title="Open & upload files"
-                    aria-label="Open folder and upload files"
+                    className="flex items-center gap-3 flex-1 min-w-0"
                   >
-                    <Upload size={14} />
-                    <span className="hidden sm:inline">Upload</span>
-                  </Link>
-                  <button
-                    onClick={() => setSharingFolderId(sharingFolderId === folder.id ? null : folder.id)}
-                    className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
-                    title="Share folder"
-                  >
-                    <Share2 size={14} />
-                  </button>
-                  <button
-                    onClick={() => deleteFolder(folder.id)}
-                    className="p-2 rounded-lg hover:bg-destructive/10 text-destructive"
-                    title="Delete folder"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-
-              <AnimatePresence>
-                {sharingFolderId === folder.id && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-2">
-                      <input
-                        value={shareEmail}
-                        onChange={(e) => setShareEmail(e.target.value)}
-                        placeholder="Search user name…"
-                        className="flex-1 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/30 text-sm outline-none"
-                        onKeyDown={(e) => e.key === "Enter" && shareFolder(folder.id)}
-                      />
-                      <button
-                        onClick={() => shareFolder(folder.id)}
-                        className="px-3 py-1.5 rounded-lg gradient-accent text-white text-xs font-medium"
-                      >
-                        Share
-                      </button>
+                    <span className="text-2xl">{folder.icon}</span>
+                    <div className="min-w-0">
+                      <div className="font-medium text-foreground truncate">{folder.name}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <span>{formatItemCount(fileCounts[folder.id] ?? 0)}</span>
+                        <span>•</span>
+                        {folder.owner_id === user?.id ? (
+                          <>
+                            <Globe size={10} /> Owner
+                          </>
+                        ) : (
+                          <>
+                            <Lock size={10} /> Shared with you
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </motion.div>
+                  </Link>
+                  <div className="flex items-center gap-1 shrink-0 opacity-100">
+                    <Link
+                      to="/folders/$folderId"
+                      params={{ folderId: folder.id }}
+                      search={{ upload: 1 }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-border/40 bg-muted/40 px-2.5 py-2 text-xs font-medium text-primary hover:bg-primary/10"
+                      title="Open & upload files"
+                      aria-label="Open folder and upload files"
+                    >
+                      <Upload size={14} />
+                      <span className="hidden sm:inline">Upload</span>
+                    </Link>
+                    <button
+                      onClick={() => setSharingFolderId(sharingFolderId === folder.id ? null : folder.id)}
+                      className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
+                      title="Share folder"
+                    >
+                      <Share2 size={14} />
+                    </button>
+                    <button
+                      onClick={() => deleteFolder(folder.id)}
+                      className="p-2 rounded-lg hover:bg-destructive/10 text-destructive"
+                      title="Delete folder"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {latest && (
+                  <Link
+                    to="/folders/$folderId"
+                    params={{ folderId: folder.id }}
+                    className="mt-3 flex items-center gap-2.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
+                    title={`Latest: ${latest.file_name}`}
+                  >
+                    {latest.thumbUrl ? (
+                      <img
+                        src={latest.thumbUrl}
+                        alt={latest.file_name}
+                        className="w-10 h-10 rounded object-cover shrink-0"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded bg-background/60 flex items-center justify-center shrink-0">
+                        {LatestIcon ? <LatestIcon size={18} className="text-muted-foreground" /> : null}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
+                        Latest file
+                      </div>
+                      <div className="text-xs text-foreground truncate">{latest.file_name}</div>
+                    </div>
+                  </Link>
                 )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
+
+                <AnimatePresence>
+                  {sharingFolderId === folder.id && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-2">
+                        <input
+                          value={shareEmail}
+                          onChange={(e) => setShareEmail(e.target.value)}
+                          placeholder="Search user name…"
+                          className="flex-1 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/30 text-sm outline-none"
+                          onKeyDown={(e) => e.key === "Enter" && shareFolder(folder.id)}
+                        />
+                        <button
+                          onClick={() => shareFolder(folder.id)}
+                          className="px-3 py-1.5 rounded-lg gradient-accent text-white text-xs font-medium"
+                        >
+                          Share
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            );
+          })}
           {myFolders.length === 0 && (
             <div className="glass p-8 text-center col-span-2">
               <FolderLock size={36} className="mx-auto mb-3 text-muted-foreground/30" />
@@ -317,29 +472,60 @@ function FoldersPage() {
               <Users size={14} /> Shared with me
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {sharedWithMe.map((folder, i) => (
-                <motion.div
-                  key={folder.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                  className="glass p-4"
-                >
-                  <Link
-                    to="/folders/$folderId"
-                    params={{ folderId: folder.id }}
-                    className="flex items-center gap-3"
+              {sharedWithMe.map((folder, i) => {
+                const latest = latestFiles[folder.id];
+                const LatestIcon = latest ? fileTypeIcon(latest.mime_type) : null;
+                return (
+                  <motion.div
+                    key={folder.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    className="glass p-4"
                   >
-                    <span className="text-2xl">{folder.icon}</span>
-                    <div>
-                      <div className="font-medium text-foreground">{folder.name}</div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Share2 size={10} /> Shared with you • {formatItemCount(fileCounts[folder.id] ?? 0)}
+                    <Link
+                      to="/folders/$folderId"
+                      params={{ folderId: folder.id }}
+                      className="flex items-center gap-3"
+                    >
+                      <span className="text-2xl">{folder.icon}</span>
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground truncate">{folder.name}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Share2 size={10} /> Shared with you • {formatItemCount(fileCounts[folder.id] ?? 0)}
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              ))}
+                    </Link>
+                    {latest && (
+                      <Link
+                        to="/folders/$folderId"
+                        params={{ folderId: folder.id }}
+                        className="mt-3 flex items-center gap-2.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
+                        title={`Latest: ${latest.file_name}`}
+                      >
+                        {latest.thumbUrl ? (
+                          <img
+                            src={latest.thumbUrl}
+                            alt={latest.file_name}
+                            className="w-10 h-10 rounded object-cover shrink-0"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded bg-background/60 flex items-center justify-center shrink-0">
+                            {LatestIcon ? <LatestIcon size={18} className="text-muted-foreground" /> : null}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
+                            Latest file
+                          </div>
+                          <div className="text-xs text-foreground truncate">{latest.file_name}</div>
+                        </div>
+                      </Link>
+                    )}
+                  </motion.div>
+                );
+              })}
             </div>
           </>
         )}
