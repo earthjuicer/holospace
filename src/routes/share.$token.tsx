@@ -17,6 +17,7 @@ interface ShareInfo {
   folder_name: string;
   folder_icon: string;
   expires_at: string;
+  allow_upload: boolean;
 }
 
 function formatRemaining(expiresAt: string) {
