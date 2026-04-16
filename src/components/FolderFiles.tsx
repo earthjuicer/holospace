@@ -44,6 +44,8 @@ interface Props {
   canDelete?: boolean;
   /** if true, automatically opens the file picker on mount (used by ?upload=1) */
   autoOpenUpload?: boolean;
+  /** Whether the current viewer is allowed to upload files. Defaults to true. */
+  canUpload?: boolean;
 }
 
 const BUCKET = "folder-files";
