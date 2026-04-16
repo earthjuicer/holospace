@@ -41,11 +41,33 @@ function formatItemCount(count: number) {
   return `${count} items`;
 }
 
+interface LatestFile {
+  id: string;
+  file_name: string;
+  mime_type: string | null;
+  storage_path: string;
+  /** Signed URL for image previews; only set when mime starts with image/. */
+  thumbUrl?: string;
+}
+
+function fileTypeIcon(mime: string | null) {
+  if (!mime) return FileIcon;
+  if (mime.startsWith("image/")) return ImageIcon;
+  if (mime.startsWith("video/")) return Video;
+  if (mime.startsWith("audio/")) return Music;
+  if (mime.startsWith("text/") || mime.includes("pdf")) return FileText;
+  return FileIcon;
+}
+
 function FoldersPage() {
   const { user } = useAuth();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [shares, setShares] = useState<FolderShare[]>([]);
   const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
+  const [latestFiles, setLatestFiles] = useState<Record<string, LatestFile>>({});
+  // Folder IDs that currently have files being dropped onto them.
+  const [uploadingFolderId, setUploadingFolderId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
@@ -70,10 +92,13 @@ function FoldersPage() {
 
     if (data.length === 0) {
       setFileCounts({});
+      setLatestFiles({});
       return;
     }
 
     const folderIds = data.map((folder) => folder.id);
+
+    // Counts (cheap, used for the "N items" label)
     const { data: fileRows } = await supabase
       .from("folder_files")
       .select("folder_id")
@@ -89,6 +114,41 @@ function FoldersPage() {
     });
 
     setFileCounts(counts);
+
+    // Latest file per folder for the preview chip on each card.
+    const { data: latestRows } = await supabase
+      .from("folder_files")
+      .select("id, folder_id, file_name, mime_type, storage_path, created_at")
+      .in("folder_id", folderIds)
+      .order("created_at", { ascending: false });
+
+    const seen: Record<string, LatestFile> = {};
+    latestRows?.forEach((row) => {
+      if (seen[row.folder_id]) return;
+      seen[row.folder_id] = {
+        id: row.id,
+        file_name: row.file_name,
+        mime_type: row.mime_type,
+        storage_path: row.storage_path,
+      };
+    });
+
+    // Sign image previews so we can show a real thumbnail (10 min URL).
+    const imageEntries = Object.entries(seen).filter(([, f]) =>
+      f.mime_type?.startsWith("image/")
+    );
+    await Promise.all(
+      imageEntries.map(async ([folderId, file]) => {
+        const { data: signed } = await supabase.storage
+          .from("folder-files")
+          .createSignedUrl(file.storage_path, 600);
+        if (signed?.signedUrl) {
+          seen[folderId] = { ...file, thumbUrl: signed.signedUrl };
+        }
+      })
+    );
+
+    setLatestFiles(seen);
   };
 
   const fetchShares = async () => {
