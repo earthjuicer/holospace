@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe, Upload,
   File as FileIcon, Image as ImageIcon, Video, Music, FileText, Loader2, Download,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFileToFolder } from "@/lib/folder-upload";
@@ -66,10 +67,10 @@ function FoldersPage() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [shares, setShares] = useState<FolderShare[]>([]);
   const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
-  const [latestFiles, setLatestFiles] = useState<Record<string, LatestFile>>({});
-  const [ownerProfiles, setOwnerProfiles] = useState<
-    Record<string, { display_name: string | null; avatar_url: string | null }>
-  >({});
+  // All files per folder (most-recent first), used for the chip's prev/next nav.
+  const [folderFiles, setFolderFiles] = useState<Record<string, LatestFile[]>>({});
+  // Per-folder index into folderFiles[folderId] (0 = newest).
+  const [chipIndex, setChipIndex] = useState<Record<string, number>>({});
   // Folder IDs that currently have files being dropped onto them.
   const [uploadingFolderId, setUploadingFolderId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
@@ -101,6 +102,29 @@ function FoldersPage() {
     } finally {
       setDownloadingId(null);
     }
+  };
+
+  // Move chip to next/prev file in this folder. Lazily signs image thumbnails
+  // when navigating into them so we don't pay the cost up-front for every file.
+  const navigateChip = async (folderId: string, dir: 1 | -1) => {
+    const files = folderFiles[folderId];
+    if (!files || files.length < 2) return;
+    const cur = chipIndex[folderId] ?? 0;
+    const nextIdx = (cur + dir + files.length) % files.length;
+    setChipIndex((p) => ({ ...p, [folderId]: nextIdx }));
+    const target = files[nextIdx];
+    if (target.thumbUrl || !target.mime_type?.startsWith("image/")) return;
+    const { data: signed } = await supabase.storage
+      .from("folder-files")
+      .createSignedUrl(target.storage_path, 600);
+    if (!signed?.signedUrl) return;
+    setFolderFiles((prev) => {
+      const list = prev[folderId];
+      if (!list) return prev;
+      const updated = [...list];
+      updated[nextIdx] = { ...updated[nextIdx], thumbUrl: signed.signedUrl };
+      return { ...prev, [folderId]: updated };
+    });
   };
 
   const openPreview = (file: LatestFile) => {
@@ -167,64 +191,59 @@ function FoldersPage() {
 
     if (data.length === 0) {
       setFileCounts({});
-      setLatestFiles({});
+      setFolderFiles({});
       return;
     }
 
     const folderIds = data.map((folder) => folder.id);
 
-    // Counts (cheap, used for the "N items" label)
+    // Fetch ALL files in one query (sorted newest first).
+    // We use this for both the count and the chip's prev/next navigation.
     const { data: fileRows } = await supabase
       .from("folder_files")
-      .select("folder_id")
-      .in("folder_id", folderIds);
+      .select("id, folder_id, file_name, mime_type, storage_path, size_bytes, created_at")
+      .in("folder_id", folderIds)
+      .order("created_at", { ascending: false });
 
     const counts = folderIds.reduce<Record<string, number>>((acc, id) => {
       acc[id] = 0;
       return acc;
     }, {});
 
-    fileRows?.forEach((file) => {
-      counts[file.folder_id] = (counts[file.folder_id] ?? 0) + 1;
-    });
-
-    setFileCounts(counts);
-
-    // Latest file per folder for the preview chip on each card.
-    const { data: latestRows } = await supabase
-      .from("folder_files")
-      .select("id, folder_id, file_name, mime_type, storage_path, size_bytes, created_at")
-      .in("folder_id", folderIds)
-      .order("created_at", { ascending: false });
-
-    const seen: Record<string, LatestFile> = {};
-    latestRows?.forEach((row) => {
-      if (seen[row.folder_id]) return;
-      seen[row.folder_id] = {
+    const grouped: Record<string, LatestFile[]> = {};
+    fileRows?.forEach((row) => {
+      counts[row.folder_id] = (counts[row.folder_id] ?? 0) + 1;
+      if (!grouped[row.folder_id]) grouped[row.folder_id] = [];
+      grouped[row.folder_id].push({
         id: row.id,
         file_name: row.file_name,
         mime_type: row.mime_type,
         storage_path: row.storage_path,
         size_bytes: row.size_bytes ?? 0,
-      };
+      });
     });
 
-    // Sign image previews so we can show a real thumbnail (10 min URL).
-    const imageEntries = Object.entries(seen).filter(([, f]) =>
-      f.mime_type?.startsWith("image/")
+    setFileCounts(counts);
+
+    // Sign image thumbnails for the FIRST (latest) file of each folder
+    // so the initial chip view shows a real image preview without delay.
+    // Other indexes get signed lazily on navigation.
+    const firstImageEntries = Object.entries(grouped).filter(
+      ([, files]) => files[0]?.mime_type?.startsWith("image/")
     );
     await Promise.all(
-      imageEntries.map(async ([folderId, file]) => {
+      firstImageEntries.map(async ([folderId, files]) => {
+        const first = files[0];
         const { data: signed } = await supabase.storage
           .from("folder-files")
-          .createSignedUrl(file.storage_path, 600);
+          .createSignedUrl(first.storage_path, 600);
         if (signed?.signedUrl) {
-          seen[folderId] = { ...file, thumbUrl: signed.signedUrl };
+          grouped[folderId] = [{ ...first, thumbUrl: signed.signedUrl }, ...files.slice(1)];
         }
       })
     );
 
-    setLatestFiles(seen);
+    setFolderFiles(grouped);
   };
 
   const fetchShares = async () => {
@@ -342,35 +361,6 @@ function FoldersPage() {
     (f) => f.owner_id !== user?.id && shares.some((s) => s.folder_id === f.id)
   );
 
-  // Fetch profile info for the owners of folders shared with me.
-  useEffect(() => {
-    const ownerIds = Array.from(new Set(sharedWithMe.map((f) => f.owner_id)));
-    const missing = ownerIds.filter((id) => !ownerProfiles[id]);
-    if (missing.length === 0) return;
-    let cancelled = false;
-    supabase
-      .from("profiles")
-      .select("user_id, display_name, avatar_url")
-      .in("user_id", missing)
-      .then(({ data }) => {
-        if (cancelled || !data) return;
-        setOwnerProfiles((prev) => {
-          const next = { ...prev };
-          data.forEach((p) => {
-            next[p.user_id] = {
-              display_name: p.display_name,
-              avatar_url: p.avatar_url,
-            };
-          });
-          return next;
-        });
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sharedWithMe.map((f) => f.owner_id).join(",")]);
-
   return (
     <div className="max-w-4xl mx-auto px-4 md:px-8 py-6 md:py-10">
       <motion.div
@@ -434,8 +424,11 @@ function FoldersPage() {
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
           {myFolders.map((folder, i) => {
-            const latest = latestFiles[folder.id];
+            const filesInFolder = folderFiles[folder.id] ?? [];
+            const idx = chipIndex[folder.id] ?? 0;
+            const latest = filesInFolder[idx];
             const LatestIcon = latest ? fileTypeIcon(latest.mime_type) : null;
+            const hasMultiple = filesInFolder.length > 1;
             const isDraggingOver = dragOverFolderId === folder.id;
             const isUploading = uploadingFolderId === folder.id;
             return (
@@ -560,9 +553,24 @@ function FoldersPage() {
 
                 {latest && (
                   <div
-                    className="mt-3 flex items-center gap-2.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
-                    title={`Latest: ${latest.file_name}`}
+                    className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
+                    title={latest.file_name}
                   >
+                    {hasMultiple && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigateChip(folder.id, -1);
+                        }}
+                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                        title="Previous file"
+                        aria-label="Previous file"
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {
@@ -586,12 +594,32 @@ function FoldersPage() {
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
-                          Latest file
+                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1">
+                          {idx === 0 ? "Latest file" : "File"}
+                          {hasMultiple && (
+                            <span className="text-muted-foreground/50">
+                              · {idx + 1}/{filesInFolder.length}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-foreground truncate">{latest.file_name}</div>
                       </div>
                     </button>
+                    {hasMultiple && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigateChip(folder.id, 1);
+                        }}
+                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                        title="Next file"
+                        aria-label="Next file"
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {
@@ -660,11 +688,11 @@ function FoldersPage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {sharedWithMe.map((folder, i) => {
-                const latest = latestFiles[folder.id];
+                const filesInFolder = folderFiles[folder.id] ?? [];
+                const idx = chipIndex[folder.id] ?? 0;
+                const latest = filesInFolder[idx];
                 const LatestIcon = latest ? fileTypeIcon(latest.mime_type) : null;
-                const owner = ownerProfiles[folder.owner_id];
-                const ownerName = owner?.display_name?.trim() || "Someone";
-                const ownerInitial = ownerName.charAt(0).toUpperCase();
+                const hasMultiple = filesInFolder.length > 1;
                 return (
                   <motion.div
                     key={folder.id}
@@ -680,33 +708,33 @@ function FoldersPage() {
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">{folder.icon}</span>
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0">
                           <div className="font-medium text-foreground truncate">{folder.name}</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                            {owner?.avatar_url ? (
-                              <img
-                                src={owner.avatar_url}
-                                alt={ownerName}
-                                className="w-4 h-4 rounded-full object-cover shrink-0"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[9px] font-semibold shrink-0">
-                                {ownerInitial}
-                              </div>
-                            )}
-                            <span className="truncate">
-                              Shared by <span className="text-foreground/80 font-medium">{ownerName}</span>
-                            </span>
-                            <span className="shrink-0">• {formatItemCount(fileCounts[folder.id] ?? 0)}</span>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Share2 size={10} /> Shared with you • {formatItemCount(fileCounts[folder.id] ?? 0)}
                           </div>
                         </div>
                       </div>
                       {latest && (
                         <div
-                          className="mt-3 flex items-center gap-2.5 rounded-lg border border-border/30 bg-muted/30 p-2"
-                          title={`Latest: ${latest.file_name}`}
+                          className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2"
+                          title={latest.file_name}
                         >
+                          {hasMultiple && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigateChip(folder.id, -1);
+                              }}
+                              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                              title="Previous file"
+                              aria-label="Previous file"
+                            >
+                              <ChevronLeft size={14} />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -730,12 +758,32 @@ function FoldersPage() {
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
-                              <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
-                                Latest file
+                              <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1">
+                                {idx === 0 ? "Latest file" : "File"}
+                                {hasMultiple && (
+                                  <span className="text-muted-foreground/50">
+                                    · {idx + 1}/{filesInFolder.length}
+                                  </span>
+                                )}
                               </div>
                               <div className="text-xs text-foreground truncate">{latest.file_name}</div>
                             </div>
                           </button>
+                          {hasMultiple && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigateChip(folder.id, 1);
+                              }}
+                              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                              title="Next file"
+                              aria-label="Next file"
+                            >
+                              <ChevronRight size={14} />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
