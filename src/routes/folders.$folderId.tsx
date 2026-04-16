@@ -8,6 +8,9 @@ import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/folders/$folderId")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    upload: search.upload === 1 || search.upload === "1" ? 1 : undefined,
+  }),
   head: () => ({
     meta: [{ title: "Folder — Workspace" }],
   }),
