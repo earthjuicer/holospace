@@ -298,6 +298,16 @@ function VoiceInvitePage() {
                 </span>
               </div>
 
+              {needsAudioUnlock && (
+                <button
+                  onClick={unlockAudio}
+                  className="w-full mb-4 px-4 py-3 rounded-lg bg-primary/15 border border-primary/40 text-primary text-sm font-medium flex items-center justify-center gap-2 hover:bg-primary/25 transition-colors"
+                >
+                  <Volume2 size={16} />
+                  Tap to enable audio
+                </button>
+              )}
+
               <div className="glass p-4">
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                   In voice — {participants.length}
