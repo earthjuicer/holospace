@@ -7,6 +7,7 @@ import { MobileTabBar } from './MobileTabBar';
 import { MobileHeader } from './MobileHeader';
 import { SearchPalette } from './SearchPalette';
 import { Onboarding } from './Onboarding';
+import { IncomingRing } from './IncomingRing';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Toaster } from 'sonner';
 
@@ -103,6 +104,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </div>
       <SearchPalette />
       <Onboarding />
+      <IncomingRing />
       <Toaster position="top-center" />
     </>
   );
