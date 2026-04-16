@@ -110,6 +110,16 @@ export function useLiveKitRoom() {
         newRoom
           .on(RoomEvent.ConnectionStateChanged, (state) => {
             setConnectionState(state);
+            const id = "lk-conn-status";
+            if (state === ConnectionState.Connecting) {
+              toast.loading("Connecting…", { id });
+            } else if (state === ConnectionState.Reconnecting) {
+              toast.loading("Reconnecting…", { id });
+            } else if (state === ConnectionState.Connected) {
+              toast.success("Connected", { id, duration: 1500 });
+            } else if (state === ConnectionState.Disconnected) {
+              toast.dismiss(id);
+            }
           })
           .on(RoomEvent.ParticipantConnected, () => {
             refreshParticipants(newRoom);
