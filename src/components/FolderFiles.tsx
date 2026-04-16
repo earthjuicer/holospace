@@ -6,6 +6,7 @@ import {
   FileText, Download, Trash2, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadResumable } from "@/lib/resumable-upload";
 
 export interface FolderFile {
   id: string;
