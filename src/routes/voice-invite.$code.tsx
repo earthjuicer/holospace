@@ -7,6 +7,8 @@ import {
   Track,
   ConnectionState,
   type Participant,
+  type RemoteTrack,
+  type RemoteAudioTrack,
 } from "livekit-client";
 import { Mic, MicOff, Headphones, PhoneOff, Users, Volume2, LogIn } from "lucide-react";
 import { toast, Toaster } from "sonner";
@@ -107,13 +109,32 @@ function VoiceInvitePage() {
         })
         .on(RoomEvent.ParticipantConnected, () => refreshParticipants(room))
         .on(RoomEvent.ParticipantDisconnected, () => refreshParticipants(room))
-        .on(RoomEvent.TrackSubscribed, () => refreshParticipants(room))
+        .on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
+          if (track.kind === Track.Kind.Audio) {
+            const el = (track as RemoteAudioTrack).attach();
+            el.setAttribute("data-lk-audio", "1");
+            el.style.display = "none";
+            document.body.appendChild(el);
+          }
+          refreshParticipants(room);
+        })
+        .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+          if (track.kind === Track.Kind.Audio) {
+            (track as RemoteAudioTrack).detach().forEach((el) => el.remove());
+          }
+          refreshParticipants(room);
+        })
         .on(RoomEvent.TrackMuted, () => refreshParticipants(room))
         .on(RoomEvent.TrackUnmuted, () => refreshParticipants(room))
         .on(RoomEvent.ActiveSpeakersChanged, () => refreshParticipants(room));
 
       await room.connect(url, token);
       await room.localParticipant.setMicrophoneEnabled(true);
+      try {
+        await room.startAudio();
+      } catch {
+        /* will retry on next user gesture */
+      }
       roomRef.current = room;
       refreshParticipants(room);
       playJoinSound();
@@ -126,6 +147,7 @@ function VoiceInvitePage() {
 
   const leave = async () => {
     await roomRef.current?.disconnect();
+    document.querySelectorAll("audio[data-lk-audio]").forEach((el) => el.remove());
     roomRef.current = null;
     setParticipants([]);
     playLeaveSound();
