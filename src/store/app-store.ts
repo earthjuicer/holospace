@@ -461,7 +461,7 @@ function schedulePush(userId: string) {
       // Network failures are non-fatal — local state remains and we'll retry
       // on the next change.
     });
-  }, 800);
+  }, 300);
 }
 
 export async function setUserScope(userId: string | null): Promise<void> {
