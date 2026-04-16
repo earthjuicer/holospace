@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -190,10 +190,14 @@ function FoldersPage() {
               className="glass p-4 group"
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <Link
+                  to="/folders/$folderId"
+                  params={{ folderId: folder.id }}
+                  className="flex items-center gap-3 flex-1 min-w-0"
+                >
                   <span className="text-2xl">{folder.icon}</span>
-                  <div>
-                    <div className="font-medium text-foreground">{folder.name}</div>
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground truncate">{folder.name}</div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       {folder.owner_id === user?.id ? (
                         <>
@@ -206,7 +210,7 @@ function FoldersPage() {
                       )}
                     </div>
                   </div>
-                </div>
+                </Link>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => setSharingFolderId(sharingFolderId === folder.id ? null : folder.id)}
@@ -274,7 +278,11 @@ function FoldersPage() {
                   transition={{ delay: i * 0.04 }}
                   className="glass p-4"
                 >
-                  <div className="flex items-center gap-3">
+                  <Link
+                    to="/folders/$folderId"
+                    params={{ folderId: folder.id }}
+                    className="flex items-center gap-3"
+                  >
                     <span className="text-2xl">{folder.icon}</span>
                     <div>
                       <div className="font-medium text-foreground">{folder.name}</div>
@@ -282,7 +290,7 @@ function FoldersPage() {
                         <Share2 size={10} /> Shared with you
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 </motion.div>
               ))}
             </div>
