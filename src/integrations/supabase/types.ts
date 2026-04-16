@@ -67,6 +67,82 @@ export type Database = {
           },
         ]
       }
+      folder_files: {
+        Row: {
+          created_at: string
+          file_name: string
+          folder_id: string
+          id: string
+          mime_type: string | null
+          size_bytes: number
+          storage_path: string
+          uploaded_by: string | null
+          uploaded_via_share: boolean
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          folder_id: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number
+          storage_path: string
+          uploaded_by?: string | null
+          uploaded_via_share?: boolean
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          folder_id?: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number
+          storage_path?: string
+          uploaded_by?: string | null
+          uploaded_via_share?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folder_files_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      folder_public_shares: {
+        Row: {
+          created_at: string
+          expires_at: string
+          folder_id: string
+          id: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          folder_id: string
+          id?: string
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          folder_id?: string
+          id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folder_public_shares_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: true
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       folder_shares: {
         Row: {
           created_at: string
@@ -331,9 +407,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_share_file: {
+        Args: {
+          _file_name: string
+          _mime_type: string
+          _size_bytes: number
+          _storage_path: string
+          _token: string
+        }
+        Returns: string
+      }
+      folder_has_active_share: {
+        Args: { _folder_id: string }
+        Returns: boolean
+      }
       get_channel_invite_code: {
         Args: { _channel_id: string }
         Returns: string
+      }
+      get_share_folder: {
+        Args: { _token: string }
+        Returns: {
+          expires_at: string
+          folder_icon: string
+          folder_id: string
+          folder_name: string
+        }[]
       }
       is_channel_member: {
         Args: { _channel_id: string; _user_id: string }
@@ -347,6 +446,24 @@ export type Database = {
       join_channel_by_invite: {
         Args: { _invite_code: string }
         Returns: string
+      }
+      list_share_files: {
+        Args: { _token: string }
+        Returns: {
+          created_at: string
+          file_name: string
+          id: string
+          mime_type: string
+          size_bytes: number
+          storage_path: string
+        }[]
+      }
+      regen_share_token: {
+        Args: { _folder_id: string }
+        Returns: {
+          expires_at: string
+          token: string
+        }[]
       }
     }
     Enums: {
