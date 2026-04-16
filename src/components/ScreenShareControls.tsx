@@ -183,7 +183,7 @@ export function ScreenShareControls({ isSharing, stream, onStart, onStop }: Prop
                     ))}
                   </div>
                   {settings.quality === "4k" && (
-                    <p className="text-[11px] text-warning mt-2">
+                    <p className="text-[11px] text-destructive mt-2">
                       ⚠ 4K requires a high-DPI display & strong upload bandwidth
                     </p>
                   )}
