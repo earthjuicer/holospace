@@ -342,6 +342,35 @@ function FoldersPage() {
     (f) => f.owner_id !== user?.id && shares.some((s) => s.folder_id === f.id)
   );
 
+  // Fetch profile info for the owners of folders shared with me.
+  useEffect(() => {
+    const ownerIds = Array.from(new Set(sharedWithMe.map((f) => f.owner_id)));
+    const missing = ownerIds.filter((id) => !ownerProfiles[id]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    supabase
+      .from("profiles")
+      .select("user_id, display_name, avatar_url")
+      .in("user_id", missing)
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setOwnerProfiles((prev) => {
+          const next = { ...prev };
+          data.forEach((p) => {
+            next[p.user_id] = {
+              display_name: p.display_name,
+              avatar_url: p.avatar_url,
+            };
+          });
+          return next;
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedWithMe.map((f) => f.owner_id).join(",")]);
+
   return (
     <div className="max-w-4xl mx-auto px-4 md:px-8 py-6 md:py-10">
       <motion.div
