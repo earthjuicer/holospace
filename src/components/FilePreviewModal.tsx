@@ -66,7 +66,30 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
     };
   }, [file, onClose]);
 
-  // Close on Escape, zoom on +/-
+  // Compute previous/next siblings (if a list was provided).
+  const { prev, next, indexLabel } = useMemo(() => {
+    if (!file || !siblings || siblings.length < 2) {
+      return { prev: null as PreviewFile | null, next: null as PreviewFile | null, indexLabel: "" };
+    }
+    const idx = siblings.findIndex((s) => s.id === file.id);
+    if (idx === -1) {
+      return { prev: null as PreviewFile | null, next: null as PreviewFile | null, indexLabel: "" };
+    }
+    return {
+      prev: idx > 0 ? siblings[idx - 1] : null,
+      next: idx < siblings.length - 1 ? siblings[idx + 1] : null,
+      indexLabel: `${idx + 1} / ${siblings.length}`,
+    };
+  }, [file, siblings]);
+
+  const goPrev = () => {
+    if (prev && onNavigate) onNavigate(prev);
+  };
+  const goNext = () => {
+    if (next && onNavigate) onNavigate(next);
+  };
+
+  // Close on Escape, zoom on +/-, navigate with arrow keys.
   useEffect(() => {
     if (!file) return;
     const onKey = (e: KeyboardEvent) => {
@@ -74,10 +97,12 @@ export function FilePreviewModal({ file, onClose, siblings, onNavigate }: Props)
       if (e.key === "+" || e.key === "=") setZoom((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP));
       if (e.key === "-" || e.key === "_") setZoom((z) => Math.max(MIN_ZOOM, z - ZOOM_STEP));
       if (e.key === "0") setZoom(1);
+      if (e.key === "ArrowLeft" && prev && onNavigate) onNavigate(prev);
+      if (e.key === "ArrowRight" && next && onNavigate) onNavigate(next);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [file, onClose]);
+  }, [file, onClose, prev, next, onNavigate]);
 
   const [copied, setCopied] = useState(false);
 
