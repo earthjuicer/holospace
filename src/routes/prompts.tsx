@@ -311,12 +311,10 @@ function PromptsPage() {
     const rendered = renderPrompt(selected.content, vars);
 
     try {
-      let assembled = '';
-      assembled = await streamCompletion({
+      const assembled = await streamCompletion({
         model: selected.model,
         messages: [{ role: 'user', content: rendered }],
         onDelta: (c) => {
-          assembled += c;
           setOutput((prev) => prev + c);
         },
       });
