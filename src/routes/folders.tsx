@@ -688,8 +688,11 @@ function FoldersPage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {sharedWithMe.map((folder, i) => {
-                const latest = latestFiles[folder.id];
+                const filesInFolder = folderFiles[folder.id] ?? [];
+                const idx = chipIndex[folder.id] ?? 0;
+                const latest = filesInFolder[idx];
                 const LatestIcon = latest ? fileTypeIcon(latest.mime_type) : null;
+                const hasMultiple = filesInFolder.length > 1;
                 return (
                   <motion.div
                     key={folder.id}
