@@ -662,6 +662,9 @@ function FoldersPage() {
               {sharedWithMe.map((folder, i) => {
                 const latest = latestFiles[folder.id];
                 const LatestIcon = latest ? fileTypeIcon(latest.mime_type) : null;
+                const owner = ownerProfiles[folder.owner_id];
+                const ownerName = owner?.display_name?.trim() || "Someone";
+                const ownerInitial = ownerName.charAt(0).toUpperCase();
                 return (
                   <motion.div
                     key={folder.id}
@@ -677,10 +680,25 @@ function FoldersPage() {
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">{folder.icon}</span>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="font-medium text-foreground truncate">{folder.name}</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Share2 size={10} /> Shared with you • {formatItemCount(fileCounts[folder.id] ?? 0)}
+                          <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                            {owner?.avatar_url ? (
+                              <img
+                                src={owner.avatar_url}
+                                alt={ownerName}
+                                className="w-4 h-4 rounded-full object-cover shrink-0"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[9px] font-semibold shrink-0">
+                                {ownerInitial}
+                              </div>
+                            )}
+                            <span className="truncate">
+                              Shared by <span className="text-foreground/80 font-medium">{ownerName}</span>
+                            </span>
+                            <span className="shrink-0">• {formatItemCount(fileCounts[folder.id] ?? 0)}</span>
                           </div>
                         </div>
                       </div>
