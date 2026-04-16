@@ -58,6 +58,7 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
   const [files, setFiles] = useState<FolderFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploads, setUploads] = useState<Record<string, InFlightUpload>>({});
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const autoOpenedRef = useRef(false);
 
