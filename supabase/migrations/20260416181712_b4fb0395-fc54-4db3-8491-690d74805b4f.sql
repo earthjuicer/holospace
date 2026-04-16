@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Anyone can view channels by invite code" ON public.voice_channels;
