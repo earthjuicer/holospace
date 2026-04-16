@@ -59,8 +59,17 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
   const [loading, setLoading] = useState(true);
   const [uploads, setUploads] = useState<Record<string, InFlightUpload>>({});
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [view, setView] = useState<"grid" | "list">(() => {
+    if (typeof window === "undefined") return "grid";
+    return (localStorage.getItem("folder-files-view") as "grid" | "list") || "grid";
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const autoOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("folder-files-view", view);
+  }, [view]);
 
   // When the page is opened with ?upload=1, pop the OS file picker once.
   useEffect(() => {
