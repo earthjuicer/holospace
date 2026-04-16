@@ -122,7 +122,26 @@ function FolderDetailPage() {
 
   const isOwner = folder?.owner_id === user?.id;
   const shareActive = share && new Date(share.expires_at).getTime() > Date.now();
+  const shareExpired = !!share && !shareActive;
   const shareUrl = share ? `${window.location.origin}/share/${share.token}` : "";
+
+  // One-time toast prompting the owner to regenerate when they land on an
+  // expired share link. Keyed on share+folder so it doesn't spam on every render.
+  useEffect(() => {
+    if (!isOwner || !shareExpired || !share) return;
+    const key = `share-expired-prompt:${folderId}:${share.token}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    toast.warning("Share link expired", {
+      description: "Anyone using the old link will get an error. Generate a new one?",
+      action: {
+        label: "Regenerate",
+        onClick: () => generateOrRegen(expiry),
+      },
+      duration: 8000,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, shareExpired, share?.token, folderId]);
 
   const generateOrRegen = async (value: ExpiryValue = expiry) => {
     const opt = EXPIRY_OPTIONS.find((o) => o.value === value) ?? EXPIRY_OPTIONS[1];
