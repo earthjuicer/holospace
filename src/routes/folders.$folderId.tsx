@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { FolderFiles } from "@/components/FolderFiles";
 import { FolderMemberPanel } from "@/components/FolderMemberPanel";
-import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, Link2Off, ChevronDown } from "lucide-react";
+import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, Link2Off, ChevronDown, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
