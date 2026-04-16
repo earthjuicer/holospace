@@ -719,13 +719,21 @@ export type Database = {
           username: string
         }[]
       }
-      regen_share_token: {
-        Args: { _folder_id: string }
-        Returns: {
-          expires_at: string
-          token: string
-        }[]
-      }
+      regen_share_token:
+        | {
+            Args: { _folder_id: string }
+            Returns: {
+              expires_at: string
+              token: string
+            }[]
+          }
+        | {
+            Args: { _expires_in?: string; _folder_id: string }
+            Returns: {
+              expires_at: string
+              token: string
+            }[]
+          }
       regen_voice_invite: {
         Args: { _channel_id: string }
         Returns: {
