@@ -427,19 +427,12 @@ function FoldersPage() {
                   e.preventDefault();
                   handleDropFiles(folder.id, e.dataTransfer.files);
                 }}
-                className={`glass p-4 group relative transition-all hover:bg-muted/30 hover:border-primary/30 cursor-pointer ${
+                className={`glass p-4 group relative transition-all ${
                   isDraggingOver
                     ? "ring-2 ring-primary/60 border-primary/40 bg-primary/5"
                     : ""
                 }`}
               >
-                {/* Full-card click target — opens the folder. Sits behind buttons/links. */}
-                <Link
-                  to="/folders/$folderId"
-                  params={{ folderId: folder.id }}
-                  aria-label={`Open folder ${folder.name}`}
-                  className="absolute inset-0 z-0 rounded-lg"
-                />
                 {(isDraggingOver || isUploading) && (
                   <div className="absolute inset-0 z-10 rounded-lg bg-primary/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/90 border border-border/50 shadow-sm text-xs font-medium text-foreground">
@@ -482,7 +475,7 @@ function FoldersPage() {
                       </div>
                     </div>
                   </Link>
-                  <div className="relative z-10 flex items-center gap-1 shrink-0 opacity-100">
+                  <div className="flex items-center gap-1 shrink-0 opacity-100">
                     <input
                       type="file"
                       multiple
@@ -594,7 +587,7 @@ function FoldersPage() {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden relative z-10"
+                      className="overflow-hidden"
                     >
                       <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-2">
                         <input

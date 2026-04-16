@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { FolderFiles } from "@/components/FolderFiles";
 import { FolderMemberPanel } from "@/components/FolderMemberPanel";
-import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, Link2Off, ChevronDown, Lock, Unlock } from "lucide-react";
+import { ArrowLeft, Link2, RefreshCw, Copy, Clock, Trash2, Link2Off, ChevronDown, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -43,7 +43,6 @@ interface Folder {
 interface Share {
   token: string;
   expires_at: string;
-  allow_upload: boolean;
 }
 
 function formatRemaining(expiresAt: string) {
@@ -93,7 +92,7 @@ function FolderDetailPage() {
             .maybeSingle(),
           supabase
             .from("folder_public_shares")
-            .select("token, expires_at, allow_upload")
+            .select("token, expires_at")
             .eq("folder_id", folderId)
             .maybeSingle(),
         ]);
@@ -123,51 +122,46 @@ function FolderDetailPage() {
 
   const isOwner = folder?.owner_id === user?.id;
   const shareActive = share && new Date(share.expires_at).getTime() > Date.now();
+  const shareExpired = !!share && !shareActive;
   const shareUrl = share ? `${window.location.origin}/share/${share.token}` : "";
 
-  const generateOrRegen = async (value: ExpiryValue = expiry, allowUpload?: boolean) => {
+  // One-time toast prompting the owner to regenerate when they land on an
+  // expired share link. Keyed on share+folder so it doesn't spam on every render.
+  useEffect(() => {
+    if (!isOwner || !shareExpired || !share) return;
+    const key = `share-expired-prompt:${folderId}:${share.token}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    toast.warning("Share link expired", {
+      description: "Anyone using the old link will get an error. Generate a new one?",
+      action: {
+        label: "Regenerate",
+        onClick: () => generateOrRegen(expiry),
+      },
+      duration: 8000,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, shareExpired, share?.token, folderId]);
+
+  const generateOrRegen = async (value: ExpiryValue = expiry) => {
     const opt = EXPIRY_OPTIONS.find((o) => o.value === value) ?? EXPIRY_OPTIONS[1];
-    const nextAllowUpload = allowUpload ?? share?.allow_upload ?? true;
     setGenerating(true);
     const { data, error } = await supabase.rpc("regen_share_token", {
       _folder_id: folderId,
       _expires_in: opt.interval,
-      _allow_upload: nextAllowUpload,
     });
     setGenerating(false);
     if (error || !data?.[0]) {
       toast.error(error?.message || "Failed to generate link");
       return;
     }
-    setShare({
-      token: data[0].token,
-      expires_at: data[0].expires_at,
-      allow_upload: data[0].allow_upload,
-    });
+    setShare({ token: data[0].token, expires_at: data[0].expires_at });
     setExpiry(value);
     toast.success(
       value === "never"
         ? "Share link generated — never expires"
         : `New share link · expires in ${opt.label.toLowerCase()}`
     );
-  };
-
-  const toggleAllowUpload = async () => {
-    if (!share) return;
-    const next = !share.allow_upload;
-    // Optimistic UI
-    setShare({ ...share, allow_upload: next });
-    const { error } = await supabase.rpc("set_share_allow_upload", {
-      _folder_id: folderId,
-      _allow_upload: next,
-    });
-    if (error) {
-      // Revert
-      setShare({ ...share });
-      toast.error(error.message || "Failed to update permission");
-      return;
-    }
-    toast.success(next ? "Visitors can now upload" : "Link is now read-only");
   };
 
   // Revoke the public share immediately by deleting the row. The /share/:token
@@ -273,6 +267,11 @@ function FolderDetailPage() {
                   <Clock size={12} /> {formatRemaining(share!.expires_at)}
                 </span>
               )}
+              {shareExpired && (
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-destructive flex items-center gap-1 px-2 py-0.5 rounded-full bg-destructive/10 border border-destructive/30">
+                  <AlertTriangle size={11} /> Expired
+                </span>
+              )}
             </div>
             {shareActive ? (
               <div className="space-y-2">
@@ -299,46 +298,6 @@ function FolderDetailPage() {
                     <Link2Off size={14} />
                   </button>
                 </div>
-
-                {/* Permission toggle */}
-                <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-muted/30 border border-border/30">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {share!.allow_upload ? (
-                      <Unlock size={14} className="text-primary shrink-0" />
-                    ) : (
-                      <Lock size={14} className="text-muted-foreground shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <div className="text-xs font-medium text-foreground">
-                        {share!.allow_upload ? "Allow upload" : "Read-only"}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground truncate">
-                        {share!.allow_upload
-                          ? "Visitors can view, download, and upload files"
-                          : "Visitors can only view and download files"}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={toggleAllowUpload}
-                    role="switch"
-                    aria-checked={share!.allow_upload}
-                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-                      share!.allow_upload ? "bg-primary" : "bg-muted-foreground/40"
-                    }`}
-                    title={
-                      share!.allow_upload
-                        ? "Switch to read-only"
-                        : "Allow visitors to upload"
-                    }
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform ${
-                        share!.allow_upload ? "translate-x-4" : "translate-x-0.5"
-                      }`}
-                    />
-                  </button>
-                </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-muted-foreground">Regenerate with:</span>
                   {EXPIRY_OPTIONS.map((opt) => (
@@ -356,19 +315,42 @@ function FolderDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <p className="text-sm text-muted-foreground flex-1 min-w-[200px]">
-                  {share
-                    ? "Link expired. Generate a new one."
-                    : "No active share link. Anyone with the link can view, download, and upload."}
-                </p>
+              <div
+                className={`flex items-start sm:items-center justify-between gap-3 flex-wrap ${
+                  shareExpired
+                    ? "rounded-lg border border-destructive/30 bg-destructive/5 p-3"
+                    : ""
+                }`}
+              >
+                <div className="flex items-start gap-2 flex-1 min-w-[200px]">
+                  {shareExpired && (
+                    <AlertTriangle size={16} className="text-destructive shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-0.5">
+                    <p className={`text-sm ${shareExpired ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                      {shareExpired
+                        ? "Your share link has expired"
+                        : "No active share link"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {shareExpired
+                        ? "Anyone using the old link will see an error. Generate a new one to keep sharing."
+                        : "Anyone with the link can view, download, and upload."}
+                    </p>
+                  </div>
+                </div>
                 <div className="flex items-center gap-0">
                   <button
                     onClick={() => generateOrRegen(expiry)}
                     disabled={generating}
-                    className="px-4 py-2 rounded-l-lg gradient-accent text-white text-sm font-medium whitespace-nowrap disabled:opacity-60"
+                    className="px-4 py-2 rounded-l-lg gradient-accent text-white text-sm font-medium whitespace-nowrap disabled:opacity-60 flex items-center gap-1.5"
                   >
-                    {generating ? "Generating…" : `Generate (${EXPIRY_OPTIONS.find(o => o.value === expiry)?.label})`}
+                    {shareExpired && !generating && <RefreshCw size={13} />}
+                    {generating
+                      ? "Generating…"
+                      : shareExpired
+                        ? `Regenerate (${EXPIRY_OPTIONS.find(o => o.value === expiry)?.label})`
+                        : `Generate (${EXPIRY_OPTIONS.find(o => o.value === expiry)?.label})`}
                   </button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
