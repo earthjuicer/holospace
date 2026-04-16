@@ -31,6 +31,8 @@ interface Props {
   shareToken?: string;
   /** owner can delete; share visitors cannot */
   canDelete?: boolean;
+  /** if true, automatically opens the file picker on mount (used by ?upload=1) */
+  autoOpenUpload?: boolean;
 }
 
 const BUCKET = "folder-files";
