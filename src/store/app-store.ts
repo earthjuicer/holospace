@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { supabase } from '@/integrations/supabase/client';
 
 // SSR-safe storage: returns a no-op storage on the server, real localStorage in the browser
 const ssrSafeStorage = () => {
