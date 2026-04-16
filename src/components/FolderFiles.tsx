@@ -90,7 +90,7 @@ export function FolderFiles({ folderId, shareToken, canDelete = false }: Props) 
             _storage_path: path,
             _file_name: file.name,
             _size_bytes: file.size,
-            _mime_type: file.type || null,
+            _mime_type: file.type || "application/octet-stream",
           });
           if (rpcErr) throw rpcErr;
         } else {
