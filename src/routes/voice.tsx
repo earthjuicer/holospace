@@ -10,7 +10,8 @@ import {
 import { toast } from "sonner";
 import { ringChannel, ringUser } from "@/lib/ring-actions";
 import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
-import { useLiveKitRoom, type VoiceParticipantInfo } from "@/hooks/use-livekit-room";
+import { type VoiceParticipantInfo } from "@/hooks/use-livekit-room";
+import { useVoiceRoom } from "@/hooks/voice-room-context";
 import { ScreenShareControls } from "@/components/ScreenShareControls";
 import { ScreenShareViewer } from "@/components/ScreenShareViewer";
 import { ChannelSidebar, type SidebarChannel } from "@/components/ChannelSidebar";
