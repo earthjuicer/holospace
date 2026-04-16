@@ -3,10 +3,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Upload, File as FileIcon, Image as ImageIcon, Video, Music,
-  FileText, Download, Trash2, Loader2,
+  FileText, Download, Trash2, Loader2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadResumable } from "@/lib/resumable-upload";
+
+interface InFlightUpload {
+  id: string;
+  name: string;
+  size: number;
+  pct: number;
+  cancel?: () => void;
+}
 
 export interface FolderFile {
   id: string;
