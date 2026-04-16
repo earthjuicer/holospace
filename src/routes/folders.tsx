@@ -712,6 +712,7 @@ function FoldersPage() {
           </>
         )}
       </motion.div>
+      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
     </div>
   );
 }
