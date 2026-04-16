@@ -183,6 +183,37 @@ export function FilePreviewModal({ file, onClose }: Props) {
                   <div className="w-px h-6 bg-border/60 mx-1" />
                 </>
               )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="p-2 rounded-lg hover:bg-muted/60 text-foreground"
+                    title="Share"
+                    aria-label="Share file"
+                  >
+                    {copied ? <Check size={16} className="text-primary" /> : <Share2 size={16} />}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuLabel>Share this file</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={nativeShare}>
+                    <Share2 size={14} className="mr-2" /> Share via…
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
+                    Copy link · expires in
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => shareLink(60 * 60, "1 hour")}>
+                    <Copy size={14} className="mr-2" /> 1 hour
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => shareLink(60 * 60 * 24, "24 hours")}>
+                    <Copy size={14} className="mr-2" /> 24 hours
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => shareLink(60 * 60 * 24 * 7, "7 days")}>
+                    <Copy size={14} className="mr-2" /> 7 days
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <button
                 onClick={download}
                 className="p-2 rounded-lg hover:bg-primary/10 text-primary"
