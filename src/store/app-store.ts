@@ -1,5 +1,17 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+
+// SSR-safe storage: returns a no-op storage on the server, real localStorage in the browser
+const ssrSafeStorage = () => {
+  if (typeof window === 'undefined') {
+    return {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    };
+  }
+  return window.localStorage;
+};
 
 export interface Block {
   id: string;
@@ -366,6 +378,8 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'notion-app-storage',
+      storage: createJSONStorage(() => ssrSafeStorage()),
+      skipHydration: true,
     }
   )
 );
