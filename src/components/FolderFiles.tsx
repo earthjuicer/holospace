@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Upload, File as FileIcon, Image as ImageIcon, Video, Music,
   FileText, Download, Trash2, Loader2, X, LayoutGrid, List as ListIcon,
-  Eye, Pencil,
+  Eye, Pencil, CheckSquare, Square,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadResumable } from "@/lib/resumable-upload";
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import JSZip from "jszip";
 
 interface InFlightUpload {
   id: string;
@@ -79,6 +80,12 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
   const [renameValue, setRenameValue] = useState("");
   const [renaming, setRenaming] = useState(false);
 
+  // Multi-select state
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const lastClickedIdRef = useRef<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<null | "zip" | "delete">(null);
+  const [zipProgress, setZipProgress] = useState(0);
+
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("folder-files-view", view);
   }, [view]);
@@ -87,7 +94,6 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
   useEffect(() => {
     if (autoOpenUpload && !autoOpenedRef.current && inputRef.current) {
       autoOpenedRef.current = true;
-      // Slight delay so the picker opens after the page settles
       const t = setTimeout(() => inputRef.current?.click(), 250);
       return () => clearTimeout(t);
     }
@@ -99,7 +105,6 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
       const { data, error } = await supabase.rpc("list_share_files", { _token: shareToken });
       if (!error && data) setFiles(data as FolderFile[]);
     } else {
-      // Raise the default 1000-row limit so big folders show every file.
       const { data } = await supabase
         .from("folder_files")
         .select("id, file_name, size_bytes, mime_type, storage_path, created_at")
@@ -142,7 +147,6 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
 
   useEffect(() => {
     load();
-    // Anonymous share-token visitors can't use realtime — skip subscription.
     if (shareToken) return;
 
     let t: ReturnType<typeof setTimeout> | null = null;
@@ -170,6 +174,20 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folderId, shareToken]);
 
+  // Drop selections that no longer exist after a reload.
+  useEffect(() => {
+    setSelected((prev) => {
+      const ids = new Set(files.map((f) => f.id));
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (ids.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [files]);
+
   const patchUpload = (id: string, patch: Partial<InFlightUpload>) =>
     setUploads((u) => (u[id] ? { ...u, [id]: { ...u[id], ...patch } } : u));
 
@@ -189,12 +207,10 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
       }));
       const safeName = file.name.replace(/[^\w.\-]/g, "_");
       const path = `${folderId}/${crypto.randomUUID()}-${safeName}`;
-      const RESUMABLE_THRESHOLD = 6 * 1024 * 1024; // 6 MB — standard upload caps around 50MB
+      const RESUMABLE_THRESHOLD = 6 * 1024 * 1024;
 
       try {
         if (file.size > RESUMABLE_THRESHOLD) {
-          // TUS resumable upload — required for files larger than ~50 MB,
-          // and gives us per-chunk progress + cancellation.
           await uploadResumable({
             file,
             path,
@@ -298,6 +314,181 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
     load();
   };
 
+  // ---------- Selection helpers ----------
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    lastClickedIdRef.current = id;
+  };
+
+  const handleItemClick = (e: React.MouseEvent, f: FolderFile) => {
+    const isMod = e.metaKey || e.ctrlKey;
+    const isShift = e.shiftKey;
+
+    // Plain click with active selection → toggle (Explorer-like). Otherwise open preview.
+    if (!isMod && !isShift) {
+      if (selected.size > 0) {
+        e.preventDefault();
+        toggleOne(f.id);
+      } else {
+        setPreviewFile(f);
+      }
+      return;
+    }
+
+    e.preventDefault();
+
+    if (isShift && lastClickedIdRef.current) {
+      const ids = files.map((x) => x.id);
+      const a = ids.indexOf(lastClickedIdRef.current);
+      const b = ids.indexOf(f.id);
+      if (a !== -1 && b !== -1) {
+        const [start, end] = a < b ? [a, b] : [b, a];
+        const range = ids.slice(start, end + 1);
+        setSelected((prev) => {
+          const next = new Set(prev);
+          for (const id of range) next.add(id);
+          return next;
+        });
+        return;
+      }
+    }
+
+    // Cmd/Ctrl click toggles
+    toggleOne(f.id);
+  };
+
+  const allSelected = files.length > 0 && selected.size === files.length;
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+      lastClickedIdRef.current = null;
+    } else {
+      setSelected(new Set(files.map((f) => f.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelected(new Set());
+    lastClickedIdRef.current = null;
+  };
+
+  const selectedFiles = useMemo(
+    () => files.filter((f) => selected.has(f.id)),
+    [files, selected]
+  );
+
+  const selectedTotalBytes = useMemo(
+    () => selectedFiles.reduce((acc, f) => acc + f.size_bytes, 0),
+    [selectedFiles]
+  );
+
+  // ---------- Bulk actions ----------
+  const downloadZip = async () => {
+    if (selectedFiles.length === 0) return;
+    if (selectedFiles.length === 1) {
+      // Single file: just download directly, no need to zip.
+      await download(selectedFiles[0]);
+      return;
+    }
+    setBulkBusy("zip");
+    setZipProgress(0);
+
+    const zip = new JSZip();
+    const usedNames = new Set<string>();
+    const dedupe = (name: string) => {
+      if (!usedNames.has(name)) {
+        usedNames.add(name);
+        return name;
+      }
+      const dot = name.lastIndexOf(".");
+      const base = dot > 0 ? name.slice(0, dot) : name;
+      const ext = dot > 0 ? name.slice(dot) : "";
+      let i = 1;
+      while (usedNames.has(`${base} (${i})${ext}`)) i++;
+      const out = `${base} (${i})${ext}`;
+      usedNames.add(out);
+      return out;
+    };
+
+    let completed = 0;
+    const total = selectedFiles.length;
+
+    try {
+      // Sequential to avoid hammering storage with too many parallel signed-URL fetches.
+      for (const f of selectedFiles) {
+        const { data, error } = await supabase.storage
+          .from(BUCKET)
+          .createSignedUrl(f.storage_path, 60 * 10);
+        if (error || !data) throw new Error(`Failed to fetch ${f.file_name}`);
+        const res = await fetch(data.signedUrl);
+        if (!res.ok) throw new Error(`Failed to fetch ${f.file_name}`);
+        const blob = await res.blob();
+        zip.file(dedupe(f.file_name), blob);
+        completed++;
+        setZipProgress(Math.round((completed / total) * 80)); // first 80% = fetching
+      }
+
+      const blob = await zip.generateAsync(
+        { type: "blob", compression: "STORE" },
+        (meta) => {
+          // Last 20% = zipping
+          setZipProgress(80 + Math.round(meta.percent * 0.2));
+        }
+      );
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `files-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${total} files as zip`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Zip download failed");
+    } finally {
+      setBulkBusy(null);
+      setZipProgress(0);
+    }
+  };
+
+  const bulkDelete = async () => {
+    if (selectedFiles.length === 0) return;
+    if (!confirm(`Delete ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}?`)) return;
+
+    setBulkBusy("delete");
+    try {
+      const paths = selectedFiles.map((f) => f.storage_path);
+      const ids = selectedFiles.map((f) => f.id);
+
+      // Remove from storage in batches of 100 (Supabase limit-friendly).
+      for (let i = 0; i < paths.length; i += 100) {
+        const slice = paths.slice(i, i + 100);
+        await supabase.storage.from(BUCKET).remove(slice);
+      }
+
+      const { error } = await supabase.from("folder_files").delete().in("id", ids);
+      if (error) throw error;
+
+      toast.success(`Deleted ${ids.length} file${ids.length === 1 ? "" : "s"}`);
+      clearSelection();
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bulk delete failed");
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
+  const isSelected = (id: string) => selected.has(id);
+  const hasSelection = selected.size > 0;
+
   return (
     <div>
       <div
@@ -384,11 +575,23 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
         </div>
       ) : (
         <>
-          {/* Toolbar: file count + view toggle (Explorer-style) */}
+          {/* Toolbar: select-all + count + view toggle */}
           <div className="flex items-center justify-between mb-3 px-1">
-            <p className="text-xs text-muted-foreground">
-              {files.length} {files.length === 1 ? "item" : "items"}
-            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleAll}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={allSelected ? "Deselect all" : "Select all"}
+                title={allSelected ? "Deselect all" : "Select all"}
+              >
+                {allSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+                <span>
+                  {hasSelection
+                    ? `${selected.size} selected`
+                    : `${files.length} ${files.length === 1 ? "item" : "items"}`}
+                </span>
+              </button>
+            </div>
             <div className="flex items-center gap-1 rounded-lg bg-muted/40 p-0.5">
               <button
                 onClick={() => setView("grid")}
@@ -425,23 +628,30 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
                 const Icon = fileIcon(f.mime_type);
                 const thumb = thumbs[f.id];
                 const isImage = f.mime_type?.startsWith("image/");
+                const checked = isSelected(f.id);
                 return (
                   <ContextMenu key={f.id}>
                     <ContextMenuTrigger asChild>
                       <motion.div
                         initial={{ opacity: 0, scale: 0.96 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        onClick={() => setPreviewFile(f)}
-                        className="glass p-2 group cursor-pointer hover:bg-muted/30 hover:ring-1 hover:ring-primary/40 transition-all relative"
+                        onClick={(e) => handleItemClick(e, f)}
+                        className={`glass p-2 group cursor-pointer transition-all relative ${
+                          checked
+                            ? "ring-2 ring-primary bg-primary/5"
+                            : "hover:bg-muted/30 hover:ring-1 hover:ring-primary/40"
+                        }`}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            setPreviewFile(f);
+                            if (hasSelection) toggleOne(f.id);
+                            else setPreviewFile(f);
                           }
                         }}
                         aria-label={`Open ${f.file_name}`}
+                        aria-pressed={checked}
                       >
                         <div className="aspect-square rounded-md bg-muted/40 flex items-center justify-center overflow-hidden mb-2">
                           {isImage && thumb ? (
@@ -465,6 +675,27 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
                         <div className="text-[10px] text-muted-foreground mt-0.5">
                           {formatBytes(f.size_bytes)}
                         </div>
+
+                        {/* Checkbox: always visible if any selected, else on hover */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleOne(f.id);
+                          }}
+                          className={`absolute top-1 left-1 p-1 rounded-md bg-background/90 backdrop-blur shadow-sm transition-opacity ${
+                            checked || hasSelection
+                              ? "opacity-100"
+                              : "opacity-0 group-hover:opacity-100"
+                          }`}
+                          aria-label={checked ? "Deselect" : "Select"}
+                          title={checked ? "Deselect" : "Select"}
+                        >
+                          {checked ? (
+                            <CheckSquare size={14} className="text-primary" />
+                          ) : (
+                            <Square size={14} className="text-muted-foreground" />
+                          )}
+                        </button>
 
                         {/* Hover actions */}
                         <div className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -527,24 +758,50 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
                 const Icon = fileIcon(f.mime_type);
                 const thumb = thumbs[f.id];
                 const isImage = f.mime_type?.startsWith("image/");
+                const checked = isSelected(f.id);
                 return (
                   <ContextMenu key={f.id}>
                     <ContextMenuTrigger asChild>
                       <motion.div
                         initial={{ opacity: 0, y: 4 }}
                         animate={{ opacity: 1, y: 0 }}
-                        onClick={() => setPreviewFile(f)}
-                        className="glass p-3 flex items-center gap-3 group cursor-pointer hover:bg-muted/30 transition-colors"
+                        onClick={(e) => handleItemClick(e, f)}
+                        className={`glass p-3 flex items-center gap-3 group cursor-pointer transition-colors ${
+                          checked
+                            ? "ring-2 ring-primary bg-primary/5"
+                            : "hover:bg-muted/30"
+                        }`}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            setPreviewFile(f);
+                            if (hasSelection) toggleOne(f.id);
+                            else setPreviewFile(f);
                           }
                         }}
                         aria-label={`Preview ${f.file_name}`}
+                        aria-pressed={checked}
                       >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleOne(f.id);
+                          }}
+                          className={`p-1 rounded-md hover:bg-muted shrink-0 transition-opacity ${
+                            checked || hasSelection
+                              ? "opacity-100"
+                              : "opacity-40 group-hover:opacity-100"
+                          }`}
+                          aria-label={checked ? "Deselect" : "Select"}
+                          title={checked ? "Deselect" : "Select"}
+                        >
+                          {checked ? (
+                            <CheckSquare size={16} className="text-primary" />
+                          ) : (
+                            <Square size={16} className="text-muted-foreground" />
+                          )}
+                        </button>
                         {isImage && thumb ? (
                           <img
                             src={thumb}
@@ -663,6 +920,69 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk action bar */}
+      <AnimatePresence>
+        {hasSelection && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 380, damping: 32 }}
+            className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[min(92vw,640px)]"
+          >
+            <div className="glass shadow-2xl border border-border/60 rounded-2xl px-3 py-2 flex items-center gap-2">
+              <button
+                onClick={clearSelection}
+                className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                title="Clear selection"
+                aria-label="Clear selection"
+              >
+                <X size={16} />
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-foreground">
+                  {selected.size} selected
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {formatBytes(selectedTotalBytes)}
+                  {bulkBusy === "zip" && ` · zipping ${zipProgress}%`}
+                </div>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={downloadZip}
+                disabled={bulkBusy !== null}
+                className="gap-1.5"
+              >
+                {bulkBusy === "zip" ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Download size={14} />
+                )}
+                {selectedFiles.length > 1 ? "Download .zip" : "Download"}
+              </Button>
+              {canDelete && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={bulkDelete}
+                  disabled={bulkBusy !== null}
+                  className="gap-1.5"
+                >
+                  {bulkBusy === "delete" ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  Delete
+                </Button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
