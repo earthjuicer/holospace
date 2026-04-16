@@ -13,6 +13,7 @@ import { Route as VoiceRouteImport } from './routes/voice'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as PromptsRouteImport } from './routes/prompts'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as KanbanRouteImport } from './routes/kanban'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
@@ -39,6 +40,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PromptsRoute = PromptsRouteImport.update({
+  id: '/prompts',
+  path: '/prompts',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/kanban': typeof KanbanRoute
   '/login': typeof LoginRoute
+  '/prompts': typeof PromptsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/kanban': typeof KanbanRoute
   '/login': typeof LoginRoute
+  '/prompts': typeof PromptsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/kanban': typeof KanbanRoute
   '/login': typeof LoginRoute
+  '/prompts': typeof PromptsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
@@ -126,6 +135,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/kanban'
     | '/login'
+    | '/prompts'
     | '/reset-password'
     | '/settings'
     | '/signup'
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/kanban'
     | '/login'
+    | '/prompts'
     | '/reset-password'
     | '/settings'
     | '/signup'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/kanban'
     | '/login'
+    | '/prompts'
     | '/reset-password'
     | '/settings'
     | '/signup'
@@ -166,6 +178,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   KanbanRoute: typeof KanbanRoute
   LoginRoute: typeof LoginRoute
+  PromptsRoute: typeof PromptsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
@@ -201,6 +214,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/prompts': {
+      id: '/prompts'
+      path: '/prompts'
+      fullPath: '/prompts'
+      preLoaderRoute: typeof PromptsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -262,6 +282,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   KanbanRoute: KanbanRoute,
   LoginRoute: LoginRoute,
+  PromptsRoute: PromptsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,

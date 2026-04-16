@@ -6,11 +6,12 @@ import { useAuth } from '@/hooks/use-auth';
 import {
   Home, FileText, Kanban, Calendar, Settings, Search, Plus, Star,
   ChevronRight, PanelLeftClose, PanelLeft, Volume2, FolderLock, LogOut, User,
-  Sun, Moon,
+  Sun, Moon, Sparkles,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/' as const, icon: Home, label: 'Home' },
+  { to: '/prompts' as const, icon: Sparkles, label: 'AI Prompts' },
   { to: '/kanban' as const, icon: Kanban, label: 'Tasks' },
   { to: '/calendar' as const, icon: Calendar, label: 'Calendar' },
   { to: '/folders' as const, icon: FolderLock, label: 'Folders' },
