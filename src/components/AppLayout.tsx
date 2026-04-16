@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useAppStore, setUserScope } from '@/store/app-store';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { AppSidebar } from './AppSidebar';
 import { MobileTabBar } from './MobileTabBar';
