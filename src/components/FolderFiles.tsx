@@ -271,6 +271,33 @@ export function FolderFiles({ folderId, shareToken, canDelete = false, autoOpenU
     load();
   };
 
+  const openRename = (f: FolderFile) => {
+    setRenameTarget(f);
+    setRenameValue(f.file_name);
+  };
+
+  const submitRename = async () => {
+    if (!renameTarget) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === renameTarget.file_name) {
+      setRenameTarget(null);
+      return;
+    }
+    setRenaming(true);
+    const { error } = await supabase
+      .from("folder_files")
+      .update({ file_name: trimmed })
+      .eq("id", renameTarget.id);
+    setRenaming(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Renamed");
+    setRenameTarget(null);
+    load();
+  };
+
   return (
     <div>
       <div
