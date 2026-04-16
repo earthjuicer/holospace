@@ -407,17 +407,37 @@ function FoldersPage() {
                     </div>
                   </Link>
                   <div className="flex items-center gap-1 shrink-0 opacity-100">
-                    <Link
-                      to="/folders/$folderId"
-                      params={{ folderId: folder.id }}
-                      search={{ upload: 1 }}
+                    {/* Hidden file input — clicking the Upload button below
+                        triggers it within the same user gesture so the OS
+                        file picker actually opens (browsers block delayed
+                        programmatic .click() calls). */}
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      id={`upload-input-${folder.id}`}
+                      onChange={(e) => {
+                        if (e.target.files?.length) {
+                          handleDropFiles(folder.id, e.target.files);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById(
+                          `upload-input-${folder.id}`
+                        ) as HTMLInputElement | null;
+                        input?.click();
+                      }}
                       className="inline-flex items-center gap-1 rounded-lg border border-border/40 bg-muted/40 px-2.5 py-2 text-xs font-medium text-primary hover:bg-primary/10"
-                      title="Open & upload files"
-                      aria-label="Open folder and upload files"
+                      title="Upload files to this folder"
+                      aria-label="Upload files to this folder"
                     >
                       <Upload size={14} />
                       <span className="hidden sm:inline">Upload</span>
-                    </Link>
+                    </button>
                     <button
                       onClick={() => setSharingFolderId(sharingFolderId === folder.id ? null : folder.id)}
                       className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
