@@ -2,9 +2,11 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DOMPurify from 'dompurify';
 import { useAppStore, type Block, type Doc } from '@/store/app-store';
+import { useCollabPresence } from '@/hooks/use-collab-presence';
+import { CollabCursors } from '@/components/CollabCursors';
 import {
   Type, Heading1, Heading2, Heading3, List, ListOrdered, Quote,
-  Code, Minus, ChevronRight, Bold, Italic, Underline, Save,
+  Code, Minus, ChevronRight, Bold, Italic, Underline, Save, RefreshCw,
 } from 'lucide-react';
 
 const SANITIZE_CONFIG = {
