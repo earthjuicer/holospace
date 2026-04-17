@@ -29,6 +29,7 @@ interface Folder {
   icon: string;
   owner_id: string;
   created_at: string;
+  cover: FolderCover | null;
 }
 
 interface FolderShare {
