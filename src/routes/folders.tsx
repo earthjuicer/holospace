@@ -511,12 +511,17 @@ function FoldersPage() {
                   </div>
                 )}
 
-                <div className="flex items-start justify-between gap-3">
-                  <Link
-                    to="/folders/$folderId"
-                    params={{ folderId: folder.id }}
-                    className="flex items-center gap-3 flex-1 min-w-0"
-                  >
+                {/* Whole-card click target — sits behind the content so action
+                    buttons and the file-preview chip remain interactive. */}
+                <Link
+                  to="/folders/$folderId"
+                  params={{ folderId: folder.id }}
+                  className="absolute inset-0 z-0 rounded-lg"
+                  aria-label={`Open folder ${folder.name}`}
+                />
+
+                <div className="relative z-[1] flex items-start justify-between gap-3 pointer-events-none">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
                     <span className="text-2xl">{folder.icon}</span>
                     <div className="min-w-0">
                       <div className="font-medium text-foreground truncate">{folder.name}</div>
@@ -534,8 +539,8 @@ function FoldersPage() {
                         )}
                       </div>
                     </div>
-                  </Link>
-                  <div className="flex items-center gap-1 shrink-0 opacity-100">
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 opacity-100 pointer-events-auto relative z-[2]">
                     <input
                       type="file"
                       multiple
@@ -588,7 +593,7 @@ function FoldersPage() {
 
                 {latest && (
                   <div
-                    className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
+                    className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors pointer-events-auto relative z-[2]"
                     title={latest.file_name}
                   >
                     {hasMultiple && (
