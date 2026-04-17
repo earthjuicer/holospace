@@ -41,8 +41,22 @@ export function BlockEditor({ doc }: BlockEditorProps) {
   const [slashFilter, setSlashFilter] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [savedIndicator, setSavedIndicator] = useState(false);
+  const [staleBlockId, setStaleBlockId] = useState<string | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
   const saveTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const focusedBlockIdRef = useRef<string | null>(null);
+  // Last content we wrote into the DOM for each block — lets us detect
+  // remote/store-driven changes vs. local typing.
+  const lastSyncedContentRef = useRef<Map<string, string>>(new Map());
+  const blocksContainerRef = useRef<HTMLDivElement>(null);
+
+  // Realtime presence for collaborative cursors on this doc.
+  const { remote: remoteCursors, broadcastCursor } = useCollabPresence(doc.id);
+
+  const getBlockEl = useCallback(
+    (blockId: string) => blockRefs.current.get(blockId),
+    []
+  );
 
   const triggerSave = useCallback(() => {
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
