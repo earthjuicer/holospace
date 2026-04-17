@@ -6,11 +6,12 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe, Upload,
   File as FileIcon, Image as ImageIcon, Video, Music, FileText, Loader2, Download,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Palette,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFileToFolder } from "@/lib/folder-upload";
 import { FilePreviewModal, type PreviewFile } from "@/components/FilePreviewModal";
+import { FolderCoverPicker, type FolderCover } from "@/components/FolderCoverPicker";
 
 export const Route = createFileRoute("/folders")({
   head: () => ({
