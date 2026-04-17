@@ -806,12 +806,54 @@ function FoldersPage() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.04 }}
-                    className="glass p-0 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30"
+                    className="glass p-0 relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30"
+                    style={
+                      folder.cover
+                        ? folder.cover.type === "color"
+                          ? { background: folder.cover.value }
+                          : {
+                              backgroundImage: `url(${folder.cover.value})`,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                            }
+                        : undefined
+                    }
                   >
+                    {folder.cover && (
+                      <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/55 to-background/30 pointer-events-none" />
+                    )}
+                    {/* Customize button for editors (shared users) */}
+                    <div className="absolute top-2 right-2 z-[3]">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setCoverPickerFolderId(
+                            coverPickerFolderId === folder.id ? null : folder.id
+                          );
+                        }}
+                        className="p-1.5 rounded-lg bg-background/70 backdrop-blur-sm hover:bg-background text-muted-foreground hover:text-foreground"
+                        title="Customize cover"
+                        aria-label="Customize folder cover"
+                      >
+                        <Palette size={13} />
+                      </button>
+                      <AnimatePresence>
+                        {coverPickerFolderId === folder.id && (
+                          <FolderCoverPicker
+                            folderId={folder.id}
+                            cover={folder.cover}
+                            onChange={(c) => saveCover(folder.id, c)}
+                            onClose={() => setCoverPickerFolderId(null)}
+                          />
+                        )}
+                      </AnimatePresence>
+                    </div>
                     <Link
                       to="/folders/$folderId"
                       params={{ folderId: folder.id }}
-                      className="block p-4 hover:bg-muted/20 transition-colors"
+                      className="block p-4 hover:bg-muted/20 transition-colors relative z-[1]"
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">{folder.icon}</span>
