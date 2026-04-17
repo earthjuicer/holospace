@@ -473,8 +473,13 @@ export function BlockEditor({ doc }: BlockEditorProps) {
       </AnimatePresence>
 
       {/* Blocks */}
-      <div className="space-y-1">
+      <div ref={blocksContainerRef} className="space-y-1 relative">
         {doc.blocks.map((block, i) => renderBlockElement(block, i))}
+        <CollabCursors
+          cursors={remoteCursors}
+          containerRef={blocksContainerRef}
+          getBlockEl={getBlockEl}
+        />
       </div>
     </div>
   );
