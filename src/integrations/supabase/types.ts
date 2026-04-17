@@ -180,6 +180,7 @@ export type Database = {
       }
       folders: {
         Row: {
+          cover: Json | null
           created_at: string
           icon: string
           id: string
@@ -188,6 +189,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cover?: Json | null
           created_at?: string
           icon?: string
           id?: string
@@ -196,6 +198,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cover?: Json | null
           created_at?: string
           icon?: string
           id?: string
