@@ -2,9 +2,11 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DOMPurify from 'dompurify';
 import { useAppStore, type Block, type Doc } from '@/store/app-store';
+import { useCollabPresence } from '@/hooks/use-collab-presence';
+import { CollabCursors } from '@/components/CollabCursors';
 import {
   Type, Heading1, Heading2, Heading3, List, ListOrdered, Quote,
-  Code, Minus, ChevronRight, Bold, Italic, Underline, Save,
+  Code, Minus, ChevronRight, Bold, Italic, Underline, Save, RefreshCw,
 } from 'lucide-react';
 
 const SANITIZE_CONFIG = {
@@ -39,8 +41,22 @@ export function BlockEditor({ doc }: BlockEditorProps) {
   const [slashFilter, setSlashFilter] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [savedIndicator, setSavedIndicator] = useState(false);
+  const [staleBlockId, setStaleBlockId] = useState<string | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
   const saveTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const focusedBlockIdRef = useRef<string | null>(null);
+  // Last content we wrote into the DOM for each block — lets us detect
+  // remote/store-driven changes vs. local typing.
+  const lastSyncedContentRef = useRef<Map<string, string>>(new Map());
+  const blocksContainerRef = useRef<HTMLDivElement>(null);
+
+  // Realtime presence for collaborative cursors on this doc.
+  const { remote: remoteCursors, broadcastCursor } = useCollabPresence(doc.id);
+
+  const getBlockEl = useCallback(
+    (blockId: string) => blockRefs.current.get(blockId),
+    []
+  );
 
   const triggerSave = useCallback(() => {
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -140,6 +156,11 @@ export function BlockEditor({ doc }: BlockEditorProps) {
         setSlashMenuBlockId(null);
       }
 
+      // Track what we just wrote so the ref reconciler can distinguish
+      // local typing from remote/store updates.
+      lastSyncedContentRef.current.set(block.id, content);
+      // The user just typed — clear any 'updated elsewhere' hint for this block.
+      setStaleBlockId((cur) => (cur === block.id ? null : cur));
       updateBlock(doc.id, block.id, { content });
       triggerSave();
     },
@@ -167,20 +188,110 @@ export function BlockEditor({ doc }: BlockEditorProps) {
       )
     : BLOCK_TYPES;
 
-  const setBlockRef = useCallback((blockId: string, initialHtml: string) => (el: HTMLElement | null) => {
-    if (el) {
-      blockRefs.current.set(blockId, el);
-      // Only set innerHTML on mount or when external content differs from DOM.
-      // Never overwrite during typing — that resets the caret to position 0
-      // and makes characters appear reversed.
-      const sanitized = sanitize(initialHtml);
-      if (el.innerHTML !== sanitized && document.activeElement !== el) {
-        el.innerHTML = sanitized;
+  const setBlockRef = useCallback(
+    (blockId: string, incomingHtml: string) => (el: HTMLElement | null) => {
+      if (!el) {
+        blockRefs.current.delete(blockId);
+        return;
       }
-    } else {
-      blockRefs.current.delete(blockId);
+      blockRefs.current.set(blockId, el);
+      const sanitized = sanitize(incomingHtml);
+      const isFocused = document.activeElement === el;
+      const lastSynced = lastSyncedContentRef.current.get(blockId);
+
+      if (el.innerHTML === sanitized) {
+        // DOM already matches — make sure baseline is set.
+        lastSyncedContentRef.current.set(blockId, sanitized);
+        return;
+      }
+
+      if (!isFocused) {
+        // Safe to overwrite — user isn't editing this block.
+        el.innerHTML = sanitized;
+        lastSyncedContentRef.current.set(blockId, sanitized);
+        // Block is no longer stale once content was applied.
+        setStaleBlockId((cur) => (cur === blockId ? null : cur));
+        return;
+      }
+
+      // The block is focused AND incoming differs from current DOM.
+      // If incoming also differs from the last value we wrote, it must come
+      // from a remote/store sync — show a subtle hint instead of clobbering
+      // the user's caret.
+      if (lastSynced !== sanitized) {
+        setStaleBlockId(blockId);
+      }
+    },
+    []
+  );
+
+  // Reload the focused block's content from the store, replacing any
+  // in-flight local edits with the latest remote version.
+  const reloadStaleBlock = useCallback(() => {
+    if (!staleBlockId) return;
+    const block = doc.blocks.find((b) => b.id === staleBlockId);
+    const el = blockRefs.current.get(staleBlockId);
+    if (!block || !el) {
+      setStaleBlockId(null);
+      return;
     }
+    const sanitized = sanitize(block.content);
+    el.innerHTML = sanitized;
+    lastSyncedContentRef.current.set(staleBlockId, sanitized);
+    setStaleBlockId(null);
+  }, [staleBlockId, doc.blocks]);
+
+  // ----- Caret tracking for collaborative cursors -----
+  // Translate a (DOM node, offset) selection into (blockId, charOffset) so
+  // remote peers can render our caret without sharing the full DOM.
+  const computeCaret = useCallback(() => {
+    const sel = typeof window !== 'undefined' ? window.getSelection() : null;
+    if (!sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    // Find which block element contains the anchor.
+    let containerEl: HTMLElement | null = null;
+    let containerBlockId: string | null = null;
+    for (const [bid, el] of blockRefs.current.entries()) {
+      if (el.contains(range.startContainer)) {
+        containerEl = el;
+        containerBlockId = bid;
+        break;
+      }
+    }
+    if (!containerEl || !containerBlockId) return null;
+    // Compute character offset from start of block to range start.
+    const pre = document.createRange();
+    pre.selectNodeContents(containerEl);
+    pre.setEnd(range.startContainer, range.startOffset);
+    const offset = pre.toString().length;
+    let selectionLength = 0;
+    if (!range.collapsed) {
+      selectionLength = range.toString().length;
+    }
+    return { blockId: containerBlockId, offset, selectionLength };
   }, []);
+
+  useEffect(() => {
+    const onSelChange = () => {
+      const caret = computeCaret();
+      if (!caret) return;
+      // Only broadcast when focus is inside our editor.
+      if (!blocksContainerRef.current?.contains(document.activeElement)) return;
+      focusedBlockIdRef.current = caret.blockId;
+      broadcastCursor(caret.blockId, caret.offset, caret.selectionLength);
+    };
+    document.addEventListener('selectionchange', onSelChange);
+    return () => document.removeEventListener('selectionchange', onSelChange);
+  }, [computeCaret, broadcastCursor]);
+
+  // Clear remote caret + focus tracking on unmount/doc change.
+  useEffect(() => {
+    return () => {
+      focusedBlockIdRef.current = null;
+      lastSyncedContentRef.current.clear();
+      broadcastCursor(null, 0, 0);
+    };
+  }, [doc.id, broadcastCursor]);
 
   const renderBlockElement = (block: Block, index: number) => {
     if (block.type === 'divider') {
@@ -232,6 +343,27 @@ export function BlockEditor({ doc }: BlockEditorProps) {
             }
             className={`${baseClasses} ${typeClasses[block.type] || ''} empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/40`}
           />
+
+          {/* 'Updated elsewhere' hint — appears when a remote sync arrives
+              while the user is focused in this block. */}
+          <AnimatePresence>
+            {staleBlockId === block.id && (
+              <motion.button
+                initial={{ opacity: 0, x: 6 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 6 }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  reloadStaleBlock();
+                }}
+                className="absolute -right-1 top-0 translate-x-full flex items-center gap-1.5 text-[11px] font-medium pl-2 pr-2.5 py-1 rounded-full glass-strong text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+                title="A newer version of this block is available. Click to reload."
+              >
+                <RefreshCw size={11} />
+                <span>Updated elsewhere · Reload</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
 
           {/* Slash Menu */}
           <AnimatePresence>
@@ -341,8 +473,13 @@ export function BlockEditor({ doc }: BlockEditorProps) {
       </AnimatePresence>
 
       {/* Blocks */}
-      <div className="space-y-1">
+      <div ref={blocksContainerRef} className="space-y-1 relative">
         {doc.blocks.map((block, i) => renderBlockElement(block, i))}
+        <CollabCursors
+          cursors={remoteCursors}
+          containerRef={blocksContainerRef}
+          getBlockEl={getBlockEl}
+        />
       </div>
     </div>
   );
