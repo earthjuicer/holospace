@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useAppStore } from "@/store/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { User, Palette, Type, Lock, Trash2, Sun, Moon, LogOut } from "lucide-react";
+import { User, Palette, Type, Lock, Trash2, Sun, Moon, LogOut, Save, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 const ACCENT_COLORS = [
@@ -26,20 +26,82 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
+function applyAccentColor(color: string) {
+  // Convert hex to oklch approximation by updating CSS custom property directly
+  // We inject a <style> tag with the override
+  let styleEl = document.getElementById("accent-override") as HTMLStyleElement | null;
+  if (!styleEl) {
+    styleEl = document.createElement("style");
+    styleEl.id = "accent-override";
+    document.head.appendChild(styleEl);
+  }
+  styleEl.textContent = `
+    :root {
+      --primary: ${color} !important;
+      --ring: ${color} !important;
+      --sidebar-primary: ${color} !important;
+    }
+    .dark {
+      --primary: ${color} !important;
+      --ring: ${color} !important;
+      --sidebar-primary: ${color} !important;
+    }
+    .gradient-accent {
+      background: linear-gradient(135deg, ${color}, ${color}cc) !important;
+    }
+    .gradient-accent-text {
+      background: linear-gradient(135deg, ${color}, ${color}cc) !important;
+      -webkit-background-clip: text !important;
+      -webkit-text-fill-color: transparent !important;
+      background-clip: text !important;
+    }
+  `;
+}
+
 function SettingsPage() {
   const { settings, updateSettings } = useAppStore();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteCountdown, setDeleteCountdown] = useState<number | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  // Local draft state — only applied when Save is clicked
+  const [draft, setDraft] = useState({ ...settings });
+  const [dirty, setDirty] = useState(false);
+
+  // Apply accent color live when page loads
+  useEffect(() => {
+    applyAccentColor(settings.accentColor);
+  }, [settings.accentColor]);
+
+  // Apply theme live
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', settings.theme === 'dark');
+  }, [settings.theme]);
+
+  const updateDraft = (updates: Partial<typeof settings>) => {
+    setDraft((prev) => ({ ...prev, ...updates }));
+    setDirty(true);
+    // Apply accent color preview immediately for visual feedback
+    if (updates.accentColor) applyAccentColor(updates.accentColor);
+    // Apply theme immediately
+    if (updates.theme) document.documentElement.classList.toggle('dark', updates.theme === 'dark');
+  };
+
+  const saveSettings = () => {
+    updateSettings(draft);
+    setDirty(false);
+    toast.success("Settings saved!");
+  };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      updateSettings({ avatar: ev.target?.result as string });
+      updateDraft({ avatar: ev.target?.result as string });
     };
     reader.readAsDataURL(file);
   };
@@ -65,10 +127,35 @@ function SettingsPage() {
     navigate({ to: '/login' });
   };
 
-  const handleDeleteAccount = () => {
-    localStorage.clear();
-    window.location.reload();
+  // 30-day deletion: schedule deletion request, show countdown
+  const handleRequestDeleteAccount = () => {
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days from now
+    localStorage.setItem('delete_account_requested_at', String(expiresAt));
+    setDeleteCountdown(30);
+    toast.success("Account deletion scheduled in 30 days. You can cancel anytime.", { duration: 5000 });
+    setShowDeleteConfirm(false);
   };
+
+  const handleCancelDeleteAccount = () => {
+    localStorage.removeItem('delete_account_requested_at');
+    setDeleteCountdown(null);
+    toast.success("Account deletion cancelled.");
+  };
+
+  // Check if a deletion was previously scheduled
+  useEffect(() => {
+    const storedExpiry = localStorage.getItem('delete_account_requested_at');
+    if (storedExpiry) {
+      const daysLeft = Math.ceil((Number(storedExpiry) - Date.now()) / (24 * 60 * 60 * 1000));
+      if (daysLeft > 0) {
+        setDeleteCountdown(daysLeft);
+      } else {
+        // Expired — actually delete
+        localStorage.clear();
+        window.location.reload();
+      }
+    }
+  }, []);
 
   return (
     <motion.div
@@ -77,7 +164,21 @@ function SettingsPage() {
       transition={{ duration: 0.28 }}
       className="max-w-2xl mx-auto px-4 md:px-8 py-6 md:py-10"
     >
-      <h1 className="text-2xl font-bold mb-8">Settings</h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-2xl font-bold">Settings</h1>
+        <button
+          onClick={saveSettings}
+          disabled={!dirty}
+          className={`flex items-center gap-2 pill-button transition-all ${
+            dirty
+              ? 'gradient-accent text-white shadow-lg'
+              : 'bg-muted/50 text-muted-foreground cursor-not-allowed'
+          }`}
+        >
+          <Save size={15} />
+          Save Settings
+        </button>
+      </div>
 
       {/* Profile */}
       <motion.section
@@ -93,8 +194,8 @@ function SettingsPage() {
         <div className="flex items-center gap-4 mb-4">
           <label className="relative cursor-pointer group">
             <div className="w-16 h-16 rounded-2xl overflow-hidden bg-muted flex items-center justify-center">
-              {settings.avatar ? (
-                <img src={settings.avatar} alt="Avatar" className="w-full h-full object-cover" />
+              {draft.avatar ? (
+                <img src={draft.avatar} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <User size={24} className="text-muted-foreground" />
               )}
@@ -111,8 +212,8 @@ function SettingsPage() {
           </label>
           <div className="flex-1 space-y-3">
             <input
-              value={settings.userName}
-              onChange={(e) => updateSettings({ userName: e.target.value })}
+              value={draft.userName}
+              onChange={(e) => updateDraft({ userName: e.target.value })}
               placeholder="Your name"
               className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
@@ -140,9 +241,9 @@ function SettingsPage() {
           <span className="text-sm">Theme</span>
           <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/50">
             <button
-              onClick={() => updateSettings({ theme: 'light' })}
+              onClick={() => updateDraft({ theme: 'light' })}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${
-                settings.theme === 'light'
+                draft.theme === 'light'
                   ? 'bg-background shadow text-foreground'
                   : 'text-muted-foreground'
               }`}
@@ -151,9 +252,9 @@ function SettingsPage() {
               Light
             </button>
             <button
-              onClick={() => updateSettings({ theme: 'dark' })}
+              onClick={() => updateDraft({ theme: 'dark' })}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${
-                settings.theme === 'dark'
+                draft.theme === 'dark'
                   ? 'bg-background shadow text-foreground'
                   : 'text-muted-foreground'
               }`}
@@ -171,17 +272,19 @@ function SettingsPage() {
             {ACCENT_COLORS.map((color) => (
               <button
                 key={color.value}
-                onClick={() => updateSettings({ accentColor: color.value })}
+                onClick={() => updateDraft({ accentColor: color.value })}
                 className={`w-8 h-8 rounded-full transition-transform ${
-                  settings.accentColor === color.value
+                  draft.accentColor === color.value
                     ? 'scale-125 ring-2 ring-offset-2 ring-offset-background ring-primary'
                     : 'hover:scale-110'
                 }`}
                 style={{ backgroundColor: color.value }}
                 aria-label={color.name}
+                title={color.name}
               />
             ))}
           </div>
+          <p className="text-xs text-muted-foreground mt-2">Click Save to apply permanently.</p>
         </div>
 
         {/* Font size */}
@@ -194,9 +297,9 @@ function SettingsPage() {
             {(['small', 'default', 'large'] as const).map((size) => (
               <button
                 key={size}
-                onClick={() => updateSettings({ fontSize: size })}
+                onClick={() => updateDraft({ fontSize: size })}
                 className={`flex-1 px-3 py-1.5 rounded-lg text-sm capitalize transition-all ${
-                  settings.fontSize === size
+                  draft.fontSize === size
                     ? 'bg-background shadow text-foreground'
                     : 'text-muted-foreground'
                 }`}
@@ -245,21 +348,42 @@ function SettingsPage() {
             Sign out
           </button>
 
-          {showDeleteConfirm ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-destructive">Are you sure? This will reset all data.</span>
+          {deleteCountdown !== null ? (
+            <div className="glass p-4 space-y-3 border border-destructive/30 rounded-2xl">
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <Clock size={15} />
+                <span>Account deletion in <strong>{deleteCountdown} day{deleteCountdown !== 1 ? 's' : ''}</strong></span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Your account and all data will be permanently deleted on that date. You can cancel anytime before then.
+              </p>
               <button
-                onClick={handleDeleteAccount}
-                className="pill-button bg-destructive text-destructive-foreground text-sm"
-              >
-                Confirm
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
+                onClick={handleCancelDeleteAccount}
                 className="pill-button bg-muted text-foreground text-sm"
               >
-                Cancel
+                Cancel Deletion
               </button>
+            </div>
+          ) : showDeleteConfirm ? (
+            <div className="glass p-4 space-y-3 border border-destructive/20 rounded-2xl">
+              <p className="text-sm text-destructive font-medium">Delete Account?</p>
+              <p className="text-xs text-muted-foreground">
+                Your account won't be deleted immediately. Like Discord, you'll have a <strong>30-day grace period</strong> to cancel. After 30 days, all data is permanently removed.
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={handleRequestDeleteAccount}
+                  className="pill-button bg-destructive text-destructive-foreground text-sm"
+                >
+                  Schedule Deletion (30 days)
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="pill-button bg-muted text-foreground text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           ) : (
             <button
@@ -267,7 +391,7 @@ function SettingsPage() {
               className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition-colors"
             >
               <Trash2 size={14} />
-              Delete account & reset data
+              Delete account
             </button>
           )}
         </div>

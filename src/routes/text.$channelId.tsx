@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { Hash, Send, Trash2, ArrowLeft } from "lucide-react";
+import { Hash, Send, Trash2, ArrowLeft, AtSign, Smile } from "lucide-react";
 import { toast } from "sonner";
 import { ChannelSidebar } from "@/components/ChannelSidebar";
+import { createPortal } from "react-dom";
 
 export const Route = createFileRoute("/text/$channelId")({
   head: () => ({
@@ -44,6 +45,133 @@ interface AuthorProfile {
   avatar_url: string | null;
 }
 
+interface WorkspaceUser {
+  user_id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+// Common emoji set for the picker
+const EMOJI_LIST = [
+  "😀","😂","😍","🥰","😎","🤔","😅","🙏","👍","👎",
+  "❤️","🔥","✅","⚡","🎉","🚀","💡","⭐","🎯","💯",
+  "😢","😡","🤯","🥳","😴","🤗","😏","🙄","😱","🤩",
+  "👋","✌️","🤝","💪","🫂","👀","💬","📌","🔔","🗓️",
+];
+
+// Portal emoji picker to avoid z-index collisions
+function EmojiPicker({
+  onSelect,
+  onClose,
+  anchorRef,
+}: {
+  onSelect: (emoji: string) => void;
+  onClose: () => void;
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const [pos, setPos] = useState({ bottom: 0, left: 0 });
+
+  useEffect(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setPos({
+      bottom: window.innerHeight - rect.top + 6,
+      left: Math.min(rect.left, window.innerWidth - 290),
+    });
+  }, [anchorRef]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const picker = document.getElementById("emoji-picker-portal");
+      if (picker && !picker.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      id="emoji-picker-portal"
+      className="fixed glass-strong p-3 rounded-2xl shadow-2xl"
+      style={{ bottom: pos.bottom, left: pos.left, zIndex: 99999, width: 280 }}
+    >
+      <div className="grid grid-cols-10 gap-1">
+        {EMOJI_LIST.map((emoji) => (
+          <button
+            key={emoji}
+            onClick={() => { onSelect(emoji); onClose(); }}
+            className="text-xl hover:bg-muted/60 rounded-lg p-1 transition-colors"
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// Portal mention picker
+function MentionPicker({
+  users,
+  query,
+  onSelect,
+  anchorRef,
+}: {
+  users: WorkspaceUser[];
+  query: string;
+  onSelect: (user: WorkspaceUser) => void;
+  anchorRef: React.RefObject<HTMLTextAreaElement | null>;
+}) {
+  const [pos, setPos] = useState({ bottom: 0, left: 0 });
+
+  useEffect(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setPos({ bottom: window.innerHeight - rect.top + 6, left: rect.left });
+  }, [anchorRef]);
+
+  const filtered = users.filter((u) => {
+    const q = query.toLowerCase();
+    return (
+      (u.display_name?.toLowerCase().includes(q) ?? false) ||
+      (u.username?.toLowerCase().includes(q) ?? false)
+    );
+  }).slice(0, 6);
+
+  if (filtered.length === 0) return null;
+
+  return createPortal(
+    <div
+      className="fixed glass-strong rounded-xl shadow-2xl overflow-hidden"
+      style={{ bottom: pos.bottom, left: pos.left, zIndex: 99999, minWidth: 200 }}
+    >
+      {filtered.map((u) => (
+        <button
+          key={u.user_id}
+          onMouseDown={(e) => { e.preventDefault(); onSelect(u); }}
+          className="flex items-center gap-2 px-3 py-2 hover:bg-muted/60 w-full text-left transition-colors"
+        >
+          <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-medium overflow-hidden shrink-0">
+            {u.avatar_url ? (
+              <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              (u.display_name || u.username || "?").charAt(0).toUpperCase()
+            )}
+          </div>
+          <span className="text-sm font-medium">
+            {u.display_name || u.username || "Unknown"}
+          </span>
+        </button>
+      ))}
+    </div>,
+    document.body
+  );
+}
+
 function TextChannelPage() {
   const { channelId } = Route.useParams();
   const { user } = useAuth();
@@ -54,11 +182,23 @@ function TextChannelPage() {
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Mention state
+  const [workspaceUsers, setWorkspaceUsers] = useState<WorkspaceUser[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     fetchChannel();
     fetchMessages();
+    // Load workspace users for mentions
+    supabase.rpc("list_workspace_users").then(({ data }) => {
+      if (data) setWorkspaceUsers(data as WorkspaceUser[]);
+    });
+
     const sub = supabase
       .channel(`text-channel-${channelId}`)
       .on(
@@ -116,10 +256,42 @@ function TextChannelPage() {
     }
   };
 
+  const handleDraftChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setDraft(val);
+
+    // Detect @mention trigger
+    const cursor = e.target.selectionStart ?? val.length;
+    const textUpToCursor = val.slice(0, cursor);
+    const mentionMatch = textUpToCursor.match(/@(\w*)$/);
+    if (mentionMatch) {
+      setMentionQuery(mentionMatch[1]);
+    } else {
+      setMentionQuery(null);
+    }
+  }, []);
+
+  const insertMention = useCallback((u: WorkspaceUser) => {
+    const name = u.display_name || u.username || "user";
+    const cursor = textareaRef.current?.selectionStart ?? draft.length;
+    const textUpToCursor = draft.slice(0, cursor);
+    const replaced = textUpToCursor.replace(/@(\w*)$/, `@${name} `);
+    setDraft(replaced + draft.slice(cursor));
+    setMentionQuery(null);
+    textareaRef.current?.focus();
+  }, [draft]);
+
+  const insertEmoji = useCallback((emoji: string) => {
+    const cursor = textareaRef.current?.selectionStart ?? draft.length;
+    setDraft(draft.slice(0, cursor) + emoji + draft.slice(cursor));
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, [draft]);
+
   const sendMessage = async () => {
     if (!draft.trim() || !user) return;
     const content = draft.trim();
     setDraft("");
+    setMentionQuery(null);
     const { error } = await supabase.from("text_messages").insert({
       channel_id: channelId,
       author_id: user.id,
@@ -211,8 +383,17 @@ function TextChannelPage() {
                         </span>
                       </div>
                     )}
+                    {/* Render @mentions with highlight */}
                     <div className="text-sm text-foreground/90 break-words whitespace-pre-wrap">
-                      {m.content}
+                      {m.content.split(/(@\w+)/g).map((part, pi) =>
+                        part.startsWith("@") ? (
+                          <span key={pi} className="text-primary font-medium bg-primary/10 rounded px-0.5">
+                            {part}
+                          </span>
+                        ) : (
+                          part
+                        )
+                      )}
                     </div>
                   </div>
                   {m.author_id === user?.id && (
@@ -233,20 +414,46 @@ function TextChannelPage() {
         {/* Composer */}
         {channel?.channel_type === "text" && (
           <div className="px-4 py-3 border-t border-border/40 shrink-0">
-            <div className="max-w-3xl mx-auto flex items-end gap-2">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
+            <div className="max-w-3xl mx-auto flex items-end gap-2 relative">
+              <div className="flex-1 relative">
+                <textarea
+                  ref={textareaRef}
+                  value={draft}
+                  onChange={handleDraftChange}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") { setMentionQuery(null); setShowEmojiPicker(false); return; }
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder={`Message #${channel.name} — type @ to mention`}
+                  rows={1}
+                  className="w-full resize-none px-4 py-2.5 pr-10 rounded-xl bg-muted/60 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/40 max-h-32"
+                />
+                <button
+                  ref={emojiButtonRef}
+                  type="button"
+                  onClick={() => setShowEmojiPicker((v) => !v)}
+                  className="absolute right-2.5 bottom-2.5 text-muted-foreground hover:text-foreground transition-colors"
+                  title="Emoji"
+                >
+                  <Smile size={16} />
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  const ta = textareaRef.current;
+                  const cursor = ta?.selectionStart ?? draft.length;
+                  setDraft(draft.slice(0, cursor) + "@" + draft.slice(cursor));
+                  setMentionQuery("");
+                  ta?.focus();
                 }}
-                placeholder={`Message #${channel.name}`}
-                rows={1}
-                className="flex-1 resize-none px-4 py-2.5 rounded-xl bg-muted/60 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/40 max-h-32"
-              />
+                className="p-2.5 rounded-xl bg-muted/60 border border-border/30 text-muted-foreground hover:text-primary transition-colors"
+                title="Mention someone"
+              >
+                <AtSign size={18} />
+              </button>
               <button
                 onClick={sendMessage}
                 disabled={!draft.trim()}
@@ -268,6 +475,25 @@ function TextChannelPage() {
           </div>
         )}
       </div>
+
+      {/* Portal-based mention picker */}
+      {mentionQuery !== null && (
+        <MentionPicker
+          users={workspaceUsers}
+          query={mentionQuery}
+          onSelect={insertMention}
+          anchorRef={textareaRef}
+        />
+      )}
+
+      {/* Portal-based emoji picker */}
+      {showEmojiPicker && (
+        <EmojiPicker
+          onSelect={insertEmoji}
+          onClose={() => setShowEmojiPicker(false)}
+          anchorRef={emojiButtonRef}
+        />
+      )}
     </div>
   );
 }

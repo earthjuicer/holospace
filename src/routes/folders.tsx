@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -201,7 +201,7 @@ function FoldersPage() {
               action: {
                 label: "Open",
                 onClick: () => {
-                  window.location.href = `/folders/${row.folder_id}`;
+                  navigate({ to: '/folders/$folderId', params: { folderId: row.folder_id } });
                 },
               },
             });
@@ -659,7 +659,8 @@ function FoldersPage() {
                   </div>
                 </div>
 
-                {latest && (
+                {/* File preview chip removed — click folder to view files */}
+                {false && latest && (
                   <div
                     className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors pointer-events-auto relative z-[2]"
                     title={latest.file_name}
@@ -755,7 +756,7 @@ function FoldersPage() {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden"
+                      className="overflow-hidden pointer-events-auto relative z-[5]"
                     >
                       <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-2">
                         <input

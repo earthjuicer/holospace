@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import {
   DndContext, DragOverlay, useDroppable, useDraggable,
   type DragEndEvent, type DragStartEvent, PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
 import { useAppStore, type Task, type KanbanColumn } from '@/store/app-store';
 import {
-  Plus, X, MoreHorizontal, Calendar, Flag, GripVertical, Trash2, Edit2,
+  Plus, X, Calendar, Flag, Trash2, Edit2,
 } from 'lucide-react';
 
 const LABEL_COLORS: Record<string, string> = {
@@ -162,6 +163,94 @@ function DraggableCard({ task, onEdit, onDelete }: { task: Task; onEdit: () => v
   );
 }
 
+// Portal-based modal so it renders above EVERYTHING including stream/voice UI
+function TaskModal({
+  editTask,
+  newTitle, setNewTitle,
+  newLabel, setNewLabel,
+  newDueDate, setNewDueDate,
+  newPriority, setNewPriority,
+  onSave,
+  onClose,
+}: {
+  editTask: Task | null;
+  newTitle: string; setNewTitle: (v: string) => void;
+  newLabel: string; setNewLabel: (v: string) => void;
+  newDueDate: string; setNewDueDate: (v: string) => void;
+  newPriority: 'low' | 'medium' | 'high'; setNewPriority: (v: 'low' | 'medium' | 'high') => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  return createPortal(
+    <div
+      className="fixed inset-0 flex items-center justify-center px-4"
+      style={{ zIndex: 9999 }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      {/* Backdrop — NO backdrop-blur so stream audio context is not interrupted */}
+      <div className="fixed inset-0 bg-black/40" style={{ zIndex: -1 }} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        className="glass-strong w-full max-w-md p-6 space-y-4 relative"
+        style={{ zIndex: 10000 }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold">{editTask ? 'Edit Task' : 'New Task'}</h3>
+        <input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          placeholder="Task title"
+          autoFocus
+          className="w-full px-4 py-3 rounded-2xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+          onKeyDown={(e) => { if (e.key === 'Enter') onSave(); }}
+        />
+        <input
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          placeholder="Labels (comma separated)"
+          className="w-full px-4 py-3 rounded-2xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <input
+          type="date"
+          value={newDueDate}
+          onChange={(e) => setNewDueDate(e.target.value)}
+          className="w-full px-4 py-3 rounded-2xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <div className="flex items-center gap-2">
+          {(['low', 'medium', 'high'] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setNewPriority(p)}
+              className={`pill-button text-xs capitalize ${
+                newPriority === p
+                  ? 'gradient-accent text-white'
+                  : 'bg-muted/50 text-muted-foreground'
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            onClick={onClose}
+            className="pill-button bg-muted text-foreground"
+          >
+            Cancel
+          </button>
+          <button onClick={onSave} className="pill-button gradient-accent text-white">
+            {editTask ? 'Save' : 'Add Task'}
+          </button>
+        </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+}
+
 export function KanbanBoard() {
   const { columns, tasks, addTask, updateTask, deleteTask, moveTask, addColumn, updateColumn, deleteColumn } =
     useAppStore();
@@ -185,12 +274,10 @@ export function KanbanBoard() {
     if (!over) return;
     const taskId = active.id as string;
     const overId = over.id as string;
-    // Check if over a column
     const col = columns.find((c) => c.id === overId);
     if (col) {
       moveTask(taskId, col.id);
     } else {
-      // Dropped on another card - move to that card's column
       const overTask = tasks.find((t) => t.id === overId);
       if (overTask) moveTask(taskId, overTask.columnId);
     }
@@ -235,6 +322,11 @@ export function KanbanBoard() {
         priority: newPriority,
       });
     }
+    setShowAddModal(null);
+    setEditTask(null);
+  };
+
+  const closeModal = () => {
     setShowAddModal(null);
     setEditTask(null);
   };
@@ -332,79 +424,18 @@ export function KanbanBoard() {
         </DndContext>
       </div>
 
-      {/* Add/Edit Task Modal */}
+      {/* Portal-based modal — renders above stream, no backdrop-blur breaking audio */}
       <AnimatePresence>
         {showAddModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center px-4"
-            onClick={() => {
-              setShowAddModal(null);
-              setEditTask(null);
-            }}
-          >
-            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              onClick={(e) => e.stopPropagation()}
-              className="glass-strong w-full max-w-md p-6 space-y-4"
-            >
-              <h3 className="text-lg font-semibold">{editTask ? 'Edit Task' : 'New Task'}</h3>
-              <input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Task title"
-                autoFocus
-                className="w-full px-4 py-3 rounded-2xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-              />
-              <input
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
-                placeholder="Labels (comma separated)"
-                className="w-full px-4 py-3 rounded-2xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-              />
-              <input
-                type="date"
-                value={newDueDate}
-                onChange={(e) => setNewDueDate(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-              />
-              <div className="flex items-center gap-2">
-                {(['low', 'medium', 'high'] as const).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setNewPriority(p)}
-                    className={`pill-button text-xs capitalize ${
-                      newPriority === p
-                        ? 'gradient-accent text-white'
-                        : 'bg-muted/50 text-muted-foreground'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  onClick={() => {
-                    setShowAddModal(null);
-                    setEditTask(null);
-                  }}
-                  className="pill-button bg-muted text-foreground"
-                >
-                  Cancel
-                </button>
-                <button onClick={handleSaveTask} className="pill-button gradient-accent text-white">
-                  {editTask ? 'Save' : 'Add Task'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <TaskModal
+            editTask={editTask}
+            newTitle={newTitle} setNewTitle={setNewTitle}
+            newLabel={newLabel} setNewLabel={setNewLabel}
+            newDueDate={newDueDate} setNewDueDate={setNewDueDate}
+            newPriority={newPriority} setNewPriority={setNewPriority}
+            onSave={handleSaveTask}
+            onClose={closeModal}
+          />
         )}
       </AnimatePresence>
     </div>

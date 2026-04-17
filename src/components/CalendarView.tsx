@@ -1,13 +1,88 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
   format, isSameMonth, isSameDay, isToday, addMonths, subMonths,
 } from 'date-fns';
 import { useAppStore, type CalEvent } from '@/store/app-store';
-import { ChevronLeft, ChevronRight, Plus, X, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 
 const EVENT_COLORS = ['#667eea', '#f5576c', '#43e97b', '#4facfe', '#fa709a', '#fbc2eb'];
+
+function AddEventModal({
+  selectedDate,
+  newEventTitle,
+  setNewEventTitle,
+  newEventColor,
+  setNewEventColor,
+  onAdd,
+  onClose,
+}: {
+  selectedDate: Date;
+  newEventTitle: string;
+  setNewEventTitle: (v: string) => void;
+  newEventColor: string;
+  setNewEventColor: (v: string) => void;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+  return createPortal(
+    <div
+      className="fixed inset-0 flex items-center justify-center px-4"
+      style={{ zIndex: 9999 }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      {/* Plain overlay, no backdrop-blur — avoids focus-stealing on inputs */}
+      <div className="fixed inset-0 bg-black/40" style={{ zIndex: -1 }} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        className="glass-strong w-full max-w-sm p-6 space-y-4 relative"
+        style={{ zIndex: 10000 }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold">
+          Add Event — {format(selectedDate, 'MMM d')}
+        </h3>
+        <input
+          value={newEventTitle}
+          onChange={(e) => setNewEventTitle(e.target.value)}
+          placeholder="Event title"
+          autoFocus
+          className="w-full px-4 py-3 rounded-2xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+          onKeyDown={(e) => e.key === 'Enter' && onAdd()}
+        />
+        <div className="flex items-center gap-2">
+          {EVENT_COLORS.map((color) => (
+            <button
+              key={color}
+              onClick={() => setNewEventColor(color)}
+              className={`w-7 h-7 rounded-full transition-transform ${
+                newEventColor === color ? 'scale-125 ring-2 ring-primary/40' : ''
+              }`}
+              style={{ backgroundColor: color }}
+            />
+          ))}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="pill-button bg-muted text-foreground"
+          >
+            Cancel
+          </button>
+          <button onClick={onAdd} className="pill-button gradient-accent text-white">
+            Add
+          </button>
+        </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+}
 
 export function CalendarView() {
   const { events, addEvent, deleteEvent } = useAppStore();
@@ -140,7 +215,11 @@ export function CalendarView() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">{format(selectedDate, 'EEEE, MMM d')}</h3>
               <button
-                onClick={() => setShowAddModal(true)}
+                onClick={() => {
+                  setNewEventTitle('');
+                  setNewEventColor(EVENT_COLORS[0]);
+                  setShowAddModal(true);
+                }}
                 className="p-1.5 rounded-xl gradient-accent text-white"
               >
                 <Plus size={16} />
@@ -178,59 +257,18 @@ export function CalendarView() {
         )}
       </div>
 
-      {/* Add Event Modal */}
+      {/* Portal-based modal — renders above everything, no backdrop-blur */}
       <AnimatePresence>
-        {showAddModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center px-4"
-            onClick={() => setShowAddModal(false)}
-          >
-            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              onClick={(e) => e.stopPropagation()}
-              className="glass-strong w-full max-w-sm p-6 space-y-4"
-            >
-              <h3 className="text-lg font-semibold">Add Event</h3>
-              <input
-                value={newEventTitle}
-                onChange={(e) => setNewEventTitle(e.target.value)}
-                placeholder="Event title"
-                autoFocus
-                className="w-full px-4 py-3 rounded-2xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                onKeyDown={(e) => e.key === 'Enter' && handleAddEvent()}
-              />
-              <div className="flex items-center gap-2">
-                {EVENT_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => setNewEventColor(color)}
-                    className={`w-7 h-7 rounded-full transition-transform ${
-                      newEventColor === color ? 'scale-125 ring-2 ring-primary/40' : ''
-                    }`}
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="pill-button bg-muted text-foreground"
-                >
-                  Cancel
-                </button>
-                <button onClick={handleAddEvent} className="pill-button gradient-accent text-white">
-                  Add
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+        {showAddModal && selectedDate && (
+          <AddEventModal
+            selectedDate={selectedDate}
+            newEventTitle={newEventTitle}
+            setNewEventTitle={setNewEventTitle}
+            newEventColor={newEventColor}
+            setNewEventColor={setNewEventColor}
+            onAdd={handleAddEvent}
+            onClose={() => setShowAddModal(false)}
+          />
         )}
       </AnimatePresence>
     </div>

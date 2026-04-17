@@ -199,7 +199,7 @@ export function AppSidebar() {
             onClick={(e) => {
               e.preventDefault();
               const id = addDocument();
-              window.location.href = `/editor/${id}`;
+              navigate({ to: '/editor/$docId', params: { docId: id } });
             }}
             className={`flex items-center justify-center gap-2 w-full py-2 rounded-xl gradient-accent text-white text-sm font-medium transition-all hover:opacity-90 active:scale-[0.97] ${
               !sidebarOpen ? 'px-2' : 'px-3'

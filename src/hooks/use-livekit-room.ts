@@ -18,8 +18,13 @@ import { toast } from "sonner";
 export interface ScreenShareTrackInfo {
   participantId: string;
   participantName: string;
-  videoTrack: MediaStreamTrack;
-  audioTrack?: MediaStreamTrack;
+  // Raw LiveKit track objects — ScreenShareViewer uses .attach()/.detach() on these.
+  // We type them as unknown here to avoid importing LiveKit types in consumer components.
+  videoTrack: unknown;
+  audioTrack?: unknown;
+  // Convenience: raw MediaStreamTrack for consumers that need it
+  videoMediaTrack: MediaStreamTrack;
+  audioMediaTrack?: MediaStreamTrack;
 }
 
 export interface VoiceParticipantInfo {
@@ -77,13 +82,16 @@ export function useLiveKitRoom() {
     const addShare = (p: Participant) => {
       const videoPub = p.getTrackPublication(Track.Source.ScreenShare);
       const audioPub = p.getTrackPublication(Track.Source.ScreenShareAudio);
-      const videoTrack = videoPub?.track?.mediaStreamTrack;
-      if (videoPub && !videoPub.isMuted && videoTrack) {
+      const videoMediaTrack = videoPub?.track?.mediaStreamTrack;
+      if (videoPub && !videoPub.isMuted && videoMediaTrack) {
         list.push({
           participantId: p.identity,
           participantName: p.name || p.identity,
-          videoTrack,
-          audioTrack: audioPub?.track?.mediaStreamTrack,
+          // Pass full LiveKit track objects so ScreenShareViewer can call .attach()
+          videoTrack: videoPub.track,
+          audioTrack: audioPub?.track ?? undefined,
+          videoMediaTrack,
+          audioMediaTrack: audioPub?.track?.mediaStreamTrack,
         });
       }
     };

@@ -14,10 +14,6 @@ import { VoiceRoomProvider } from '@/hooks/voice-room-context';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Toaster } from 'sonner';
 
-// Routes that anyone can visit without signing in. Anything matching one of
-// these prefixes skips the auth redirect and is rendered as a bare page
-// (no app sidebar / mobile chrome). Voice invite links work for guests —
-// they pick a name and join, no signup required.
 const PUBLIC_ROUTES = [
   '/login',
   '/signup',
@@ -26,6 +22,33 @@ const PUBLIC_ROUTES = [
   '/share',
   '/voice-invite',
 ];
+
+// Injects accent color as a CSS custom property override so it actually
+// affects all components without needing a full re-render chain.
+function applyAccentColor(hex: string) {
+  let el = document.getElementById('accent-override') as HTMLStyleElement | null;
+  if (!el) {
+    el = document.createElement('style');
+    el.id = 'accent-override';
+    document.head.appendChild(el);
+  }
+  el.textContent = `
+    :root, .dark {
+      --primary: ${hex} !important;
+      --ring: ${hex} !important;
+      --sidebar-primary: ${hex} !important;
+    }
+    .gradient-accent {
+      background: linear-gradient(135deg, ${hex}, ${hex}cc) !important;
+    }
+    .gradient-accent-text {
+      background: linear-gradient(135deg, ${hex}, ${hex}cc) !important;
+      -webkit-background-clip: text !important;
+      -webkit-text-fill-color: transparent !important;
+      background-clip: text !important;
+    }
+  `;
+}
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
@@ -37,24 +60,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const isPublicRoute = PUBLIC_ROUTES.some((r) => location.pathname.startsWith(r));
 
-  // Swap the persisted store to the current user's bucket whenever auth
-  // changes. Each user (and signed-out anon) gets their own dashboard,
-  // documents, tasks, calendar, and settings on this device.
   useEffect(() => {
     if (loading) return;
     let cancelled = false;
     setStoreReady(false);
     setUserScope(user?.id ?? null).then(async () => {
       if (cancelled) return;
-      // After hydrating + syncing, prefill profile fields from the auth/profile
-      // record — but never overwrite values the user has set themselves.
       if (user) {
         const state = useAppStore.getState();
         const current = state.settings;
-        const isPlaceholderName =
-          !current.userName || current.userName === 'User';
-        const isPlaceholderEmail =
-          !current.userEmail || current.userEmail === 'user@example.com';
+        const isPlaceholderName = !current.userName || current.userName === 'User';
+        const isPlaceholderEmail = !current.userEmail || current.userEmail === 'user@example.com';
 
         if (isPlaceholderName || isPlaceholderEmail || !current.avatar) {
           const { data: profile } = await supabase
@@ -65,10 +81,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
           const updates: Partial<typeof current> = {};
           if (isPlaceholderName) {
-            updates.userName =
-              profile?.display_name ||
-              user.email?.split('@')[0] ||
-              'User';
+            updates.userName = profile?.display_name || user.email?.split('@')[0] || 'User';
           }
           if (isPlaceholderEmail && user.email) {
             updates.userEmail = user.email;
@@ -83,34 +96,35 @@ export function AppLayout({ children }: { children: ReactNode }) {
       }
       setStoreReady(true);
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [loading, user?.id, user?.email]);
 
+  // Apply theme class
   useEffect(() => {
     const root = document.documentElement;
-    if (settings.theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
+    if (settings.theme === 'dark') root.classList.add('dark');
+    else root.classList.remove('dark');
   }, [settings.theme]);
 
+  // Apply font size
   useEffect(() => {
-    const root = document.documentElement;
-    root.style.fontSize =
+    document.documentElement.style.fontSize =
       settings.fontSize === 'small' ? '14px' : settings.fontSize === 'large' ? '18px' : '16px';
   }, [settings.fontSize]);
 
-  // Redirect unauthenticated users to login
+  // Apply accent color — this is the fix: previously picking a color in Settings
+  // called updateSettings() but nothing wired the hex to actual CSS variables,
+  // so buttons/gradients never changed. Now we inject it at the root level.
+  useEffect(() => {
+    if (settings.accentColor) applyAccentColor(settings.accentColor);
+  }, [settings.accentColor]);
+
   useEffect(() => {
     if (!loading && !user && !isPublicRoute) {
       navigate({ to: '/login' });
     }
   }, [loading, user, isPublicRoute, navigate]);
 
-  // Show loading spinner while checking auth
   if (loading) {
     return (
       <div className="flex h-[100dvh] w-full items-center justify-center bg-background">
@@ -119,7 +133,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Public routes (login, signup, etc.) — no sidebar
   if (isPublicRoute) {
     return (
       <>
@@ -129,7 +142,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Not logged in, or store still rehydrating into the user's bucket — show spinner
   if (!user || !storeReady) {
     return (
       <div className="flex h-[100dvh] w-full items-center justify-center bg-background">
@@ -146,7 +158,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {isMobile && <MobileHeader />}
           <main className="flex-1 overflow-y-auto overflow-x-hidden transition-all duration-220">
             {children}
-            {/* Spacer so content doesn't hide behind fixed mobile tab bar */}
             {isMobile && <div className="h-16 shrink-0" aria-hidden="true" />}
           </main>
           {isMobile && <MobileTabBar />}

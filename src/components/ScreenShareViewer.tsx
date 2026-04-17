@@ -31,91 +31,139 @@ export function ScreenShareViewer({ shares }: Props) {
 
 function ScreenShareTile({ share }: { share: ScreenShareTrackInfo }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  // Start muted so iOS/Android allow inline autoplay. User can unmute on tap.
-  const [muted, setMuted] = useState(true);
+  // Separate hidden <audio> element for screen share audio.
+  // Keeping audio on its own element avoids the browser muting the video
+  // element when it auto-plays — the video can be muted (required for
+  // autoplay policy) while audio plays freely.
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  // True if the browser blocked autoplay and we need a user gesture to start.
   const [needsTap, setNeedsTap] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
 
-  // Attach LiveKit tracks to the <video> element using LiveKit's helpers when
-  // available. Track.attach() handles edge cases (codec, srcObject reuse,
-  // re-attaching across track restarts) better than building a MediaStream
-  // ourselves, which is the usual reason mobile shows a black frame.
+  // ── VIDEO track ────────────────────────────────────────────────────────────
+  // Attach only the video track to the <video> element.
+  // We MUST keep the video element muted so the browser allows autoplay.
+  // Audio is handled separately below.
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
 
     const vTrack = share.videoTrack as unknown as {
       attach?: (el: HTMLMediaElement) => HTMLMediaElement;
-      detach?: (el?: HTMLMediaElement) => HTMLMediaElement[] | HTMLMediaElement;
+      detach?: (el?: HTMLMediaElement) => void;
       mediaStreamTrack?: MediaStreamTrack;
     };
-    const aTrack = share.audioTrack as unknown as {
-      attach?: (el: HTMLMediaElement) => HTMLMediaElement;
-      detach?: (el?: HTMLMediaElement) => HTMLMediaElement[] | HTMLMediaElement;
-      mediaStreamTrack?: MediaStreamTrack;
-    } | undefined;
 
     let usedAttach = false;
-
     try {
       if (typeof vTrack.attach === "function") {
         vTrack.attach(el);
         usedAttach = true;
-      }
-      if (aTrack && typeof aTrack.attach === "function") {
-        aTrack.attach(el);
       }
     } catch {
       usedAttach = false;
     }
 
     if (!usedAttach) {
-      // Fallback: build a MediaStream from the underlying MediaStreamTracks.
       const stream = new MediaStream();
       const v = vTrack.mediaStreamTrack ?? (share.videoTrack as unknown as MediaStreamTrack);
       if (v) stream.addTrack(v);
-      const a = aTrack?.mediaStreamTrack;
-      if (a) stream.addTrack(a);
+      // Do NOT add the audio track here — it goes on the separate <audio> element
       el.srcObject = stream;
     }
 
-    // iOS Safari refuses to play a fresh stream until play() is invoked
-    // explicitly; if it's still blocked (background tab, low-power mode),
-    // surface a "Tap to play" overlay.
-    const tryPlay = () => {
-      const p = el.play();
-      if (p && typeof p.then === "function") {
-        p.then(() => setNeedsTap(false)).catch(() => setNeedsTap(true));
-      }
-    };
-    tryPlay();
+    el.muted = true; // Always mute video element — audio is on <audio>
+    el.play().catch(() => setNeedsTap(true));
 
     return () => {
       try {
         if (typeof vTrack.detach === "function") vTrack.detach(el);
-        if (aTrack && typeof aTrack.detach === "function") aTrack.detach(el);
-      } catch {
-        // ignore
-      }
-      if (!usedAttach) {
-        el.srcObject = null;
-      }
+      } catch { /* ignore */ }
+      if (!usedAttach) el.srcObject = null;
     };
-  }, [share.videoTrack, share.audioTrack]);
+  }, [share.videoTrack]);
+
+  // ── AUDIO track ────────────────────────────────────────────────────────────
+  // Attach screen share audio to a SEPARATE <audio> element.
+  // This is the key fix — browsers allow audio to play on an <audio> element
+  // even when the corresponding <video> is muted for autoplay.
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl || !share.audioTrack) {
+      setAudioReady(false);
+      return;
+    }
+
+    const aTrack = share.audioTrack as unknown as {
+      attach?: (el: HTMLMediaElement) => HTMLMediaElement;
+      detach?: (el?: HTMLMediaElement) => void;
+      mediaStreamTrack?: MediaStreamTrack;
+    };
+
+    let usedAttach = false;
+    try {
+      if (typeof aTrack.attach === "function") {
+        aTrack.attach(audioEl);
+        usedAttach = true;
+      }
+    } catch {
+      usedAttach = false;
+    }
+
+    if (!usedAttach) {
+      const stream = new MediaStream();
+      const a = aTrack.mediaStreamTrack ?? (share.audioTrack as unknown as MediaStreamTrack);
+      if (a) stream.addTrack(a);
+      audioEl.srcObject = stream;
+    }
+
+    audioEl.muted = muted;
+    audioEl.volume = 1.0;
+
+    audioEl
+      .play()
+      .then(() => setAudioReady(true))
+      .catch(() => {
+        // Autoplay blocked — user needs to interact first.
+        // We'll retry on next user gesture (handled by handleManualPlay).
+        setAudioReady(false);
+      });
+
+    setAudioReady(true);
+
+    return () => {
+      try {
+        if (typeof aTrack.detach === "function") aTrack.detach(audioEl);
+      } catch { /* ignore */ }
+      if (!usedAttach) audioEl.srcObject = null;
+      setAudioReady(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [share.audioTrack]);
+
+  // Sync muted state to the audio element whenever the toggle changes
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.muted = muted;
+  }, [muted]);
 
   const handleManualPlay = () => {
-    const el = videoRef.current;
-    if (!el) return;
-    el.play()
-      .then(() => setNeedsTap(false))
-      .catch(() => {
-        // As a last resort, force-mute and retry — muted inline video is
-        // always allowed to autoplay on mobile.
-        setMuted(true);
-        el.muted = true;
-        el.play().then(() => setNeedsTap(false)).catch(() => {});
-      });
+    const video = videoRef.current;
+    const audio = audioRef.current;
+    if (video) {
+      video.play().then(() => setNeedsTap(false)).catch(() => {});
+    }
+    if (audio) {
+      audio.muted = false;
+      audio.play().then(() => setAudioReady(true)).catch(() => {});
+      setMuted(false);
+    }
+  };
+
+  const toggleMute = () => {
+    const next = !muted;
+    setMuted(next);
+    if (audioRef.current) audioRef.current.muted = next;
   };
 
   const toggleFullscreen = async () => {
@@ -123,7 +171,6 @@ function ScreenShareTile({ share }: { share: ScreenShareTrackInfo }) {
       webkitEnterFullscreen?: () => void;
     }) | null;
     if (!el) return;
-    // iOS Safari only supports fullscreen on the <video> element itself.
     if (typeof el.webkitEnterFullscreen === "function" && !document.fullscreenElement) {
       el.webkitEnterFullscreen();
       return;
@@ -132,14 +179,14 @@ function ScreenShareTile({ share }: { share: ScreenShareTrackInfo }) {
       try {
         await el.requestFullscreen();
         setFullscreen(true);
-      } catch {
-        // fullscreen may be unavailable in this context
-      }
+      } catch { /* fullscreen unavailable */ }
     } else {
       await document.exitFullscreen();
       setFullscreen(false);
     }
   };
+
+  const hasAudio = !!share.audioTrack;
 
   return (
     <div className="glass rounded-xl overflow-hidden group relative">
@@ -147,15 +194,20 @@ function ScreenShareTile({ share }: { share: ScreenShareTrackInfo }) {
         <span className="text-xs font-medium text-foreground flex items-center gap-2 truncate">
           <span className="w-2 h-2 rounded-full bg-destructive animate-pulse shrink-0" />
           <span className="truncate">{share.participantName} is sharing</span>
+          {hasAudio && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+              audioReady && !muted
+                ? "bg-green-500/20 text-green-600 dark:text-green-400"
+                : "bg-muted text-muted-foreground"
+            }`}>
+              {muted ? "🔇 muted" : audioReady ? "🔊 audio" : "⚠ no audio"}
+            </span>
+          )}
         </span>
         <div className="flex items-center gap-1 shrink-0">
-          {share.audioTrack && (
+          {hasAudio && (
             <button
-              onClick={() => {
-                const next = !muted;
-                setMuted(next);
-                if (videoRef.current) videoRef.current.muted = next;
-              }}
+              onClick={toggleMute}
               className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
               title={muted ? "Unmute share audio" : "Mute share audio"}
             >
@@ -171,20 +223,30 @@ function ScreenShareTile({ share }: { share: ScreenShareTrackInfo }) {
           </button>
         </div>
       </div>
+
       <div className="relative">
+        {/* Video element — always muted so autoplay works */}
         <video
           ref={videoRef}
           autoPlay
           playsInline
-          {...({ "webkit-playsinline": "true" } as Record<string, string>)}
-          muted={muted}
+          muted
           controls={false}
           className="w-full aspect-video bg-black object-contain"
-          onClick={() => {
-            if (needsTap) handleManualPlay();
-          }}
+          onClick={() => { if (needsTap) handleManualPlay(); }}
         />
-        {needsTap && (
+
+        {/* Separate hidden audio element for screen share audio */}
+        {/* This is the fix: audio on its own element plays even when video is muted */}
+        <audio
+          ref={audioRef}
+          autoPlay
+          playsInline
+          muted={muted}
+          style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+        />
+
+        {(needsTap || (!audioReady && hasAudio)) && (
           <button
             onClick={handleManualPlay}
             className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 text-white"
@@ -193,7 +255,9 @@ function ScreenShareTile({ share }: { share: ScreenShareTrackInfo }) {
             <div className="w-14 h-14 rounded-full bg-white/15 backdrop-blur flex items-center justify-center">
               <Play size={26} className="ml-0.5" />
             </div>
-            <span className="text-sm font-medium">Tap to play</span>
+            <span className="text-sm font-medium">
+              {needsTap ? "Tap to play" : "Tap to enable audio"}
+            </span>
           </button>
         )}
       </div>

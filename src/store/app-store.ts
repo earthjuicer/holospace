@@ -441,15 +441,21 @@ async function pushToBackend(userId: string) {
 /** Apply a backend snapshot to local state. Called on initial pull and on
  *  realtime updates from other devices. */
 function applyBackendSnapshot(snapshot: Partial<SyncedSnapshot>, updatedAt: string | null) {
-  useAppStore.setState((s) => ({
-    ...s,
-    documents: snapshot.documents ?? s.documents,
-    columns: snapshot.columns ?? s.columns,
-    tasks: snapshot.tasks ?? s.tasks,
-    events: snapshot.events ?? s.events,
-    settings: { ...s.settings, ...(snapshot.settings ?? {}) },
-    onboardingComplete: snapshot.onboardingComplete ?? s.onboardingComplete,
-  }));
+  // Apply each slice independently so only components subscribed to changed
+  // slices re-render — prevents "whole page refresh" feeling on sync.
+  const s = useAppStore.getState();
+  const patch: Partial<AppState> = {};
+  if (snapshot.documents && snapshot.documents !== s.documents) patch.documents = snapshot.documents;
+  if (snapshot.columns && snapshot.columns !== s.columns) patch.columns = snapshot.columns;
+  if (snapshot.tasks && snapshot.tasks !== s.tasks) patch.tasks = snapshot.tasks;
+  if (snapshot.events && snapshot.events !== s.events) patch.events = snapshot.events;
+  if (snapshot.settings) patch.settings = { ...s.settings, ...snapshot.settings };
+  if (snapshot.onboardingComplete !== undefined && snapshot.onboardingComplete !== s.onboardingComplete) {
+    patch.onboardingComplete = snapshot.onboardingComplete;
+  }
+  if (Object.keys(patch).length > 0) {
+    useAppStore.setState(patch);
+  }
   lastBackendUpdatedAt = updatedAt;
 }
 
@@ -461,7 +467,7 @@ function schedulePush(userId: string) {
       // Network failures are non-fatal — local state remains and we'll retry
       // on the next change.
     });
-  }, 300);
+  }, 800);
 }
 
 export async function setUserScope(userId: string | null): Promise<void> {
