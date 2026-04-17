@@ -403,7 +403,20 @@ function FoldersPage() {
     }
   };
 
-  const myFolders = folders.filter((f) => f.owner_id === user?.id);
+  const saveCover = async (folderId: string, cover: FolderCover | null) => {
+    // Optimistic update so the picker preview feels instant.
+    setFolders((prev) => prev.map((f) => (f.id === folderId ? { ...f, cover } : f)));
+    const { error } = await supabase
+      .from("folders")
+      .update({ cover: cover as unknown as never })
+      .eq("id", folderId);
+    if (error) {
+      toast.error(error.message || "Failed to save cover");
+      fetchFolders();
+    }
+  };
+
+
   const sharedWithMe = folders.filter(
     (f) => f.owner_id !== user?.id && shares.some((s) => s.folder_id === f.id)
   );
