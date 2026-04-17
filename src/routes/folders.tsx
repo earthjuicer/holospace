@@ -529,9 +529,10 @@ function FoldersPage() {
                     : undefined
                 }
               >
-                {/* Readability scrim when a cover is set so text/icons stay legible. */}
+                {/* Readability scrim when a cover is set so text/icons stay legible.
+                    Sits below the click-target Link (z-0) so it never blocks clicks. */}
                 {folder.cover && (
-                  <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/55 to-background/30 pointer-events-none" />
+                  <div className="absolute inset-0 -z-10 bg-gradient-to-t from-background/85 via-background/55 to-background/30 pointer-events-none" />
                 )}
                 {(isDraggingOver || isUploading) && (
                   <div className="absolute inset-0 z-10 rounded-lg bg-primary/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
