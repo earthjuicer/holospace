@@ -344,6 +344,27 @@ export function BlockEditor({ doc }: BlockEditorProps) {
             className={`${baseClasses} ${typeClasses[block.type] || ''} empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/40`}
           />
 
+          {/* 'Updated elsewhere' hint — appears when a remote sync arrives
+              while the user is focused in this block. */}
+          <AnimatePresence>
+            {staleBlockId === block.id && (
+              <motion.button
+                initial={{ opacity: 0, x: 6 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 6 }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  reloadStaleBlock();
+                }}
+                className="absolute -right-1 top-0 translate-x-full flex items-center gap-1.5 text-[11px] font-medium pl-2 pr-2.5 py-1 rounded-full glass-strong text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+                title="A newer version of this block is available. Click to reload."
+              >
+                <RefreshCw size={11} />
+                <span>Updated elsewhere · Reload</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
+
           {/* Slash Menu */}
           <AnimatePresence>
             {slashMenuBlockId === block.id && (
