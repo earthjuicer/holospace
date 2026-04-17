@@ -216,13 +216,9 @@ export function BlockEditor({ doc }: BlockEditorProps) {
         )}
         <div className="flex-1 relative">
           <div
-            ref={(el) => {
-              if (el) blockRefs.current.set(block.id, el);
-              else blockRefs.current.delete(block.id);
-            }}
+            ref={setBlockRef(block.id, block.content)}
             contentEditable
             suppressContentEditableWarning
-            dangerouslySetInnerHTML={{ __html: sanitize(block.content) }}
             onInput={(e) => handleBlockInput(block, e)}
             onKeyDown={(e) => handleBlockKeyDown(e, block, index)}
             data-placeholder={
