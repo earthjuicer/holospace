@@ -188,20 +188,110 @@ export function BlockEditor({ doc }: BlockEditorProps) {
       )
     : BLOCK_TYPES;
 
-  const setBlockRef = useCallback((blockId: string, initialHtml: string) => (el: HTMLElement | null) => {
-    if (el) {
-      blockRefs.current.set(blockId, el);
-      // Only set innerHTML on mount or when external content differs from DOM.
-      // Never overwrite during typing — that resets the caret to position 0
-      // and makes characters appear reversed.
-      const sanitized = sanitize(initialHtml);
-      if (el.innerHTML !== sanitized && document.activeElement !== el) {
-        el.innerHTML = sanitized;
+  const setBlockRef = useCallback(
+    (blockId: string, incomingHtml: string) => (el: HTMLElement | null) => {
+      if (!el) {
+        blockRefs.current.delete(blockId);
+        return;
       }
-    } else {
-      blockRefs.current.delete(blockId);
+      blockRefs.current.set(blockId, el);
+      const sanitized = sanitize(incomingHtml);
+      const isFocused = document.activeElement === el;
+      const lastSynced = lastSyncedContentRef.current.get(blockId);
+
+      if (el.innerHTML === sanitized) {
+        // DOM already matches — make sure baseline is set.
+        lastSyncedContentRef.current.set(blockId, sanitized);
+        return;
+      }
+
+      if (!isFocused) {
+        // Safe to overwrite — user isn't editing this block.
+        el.innerHTML = sanitized;
+        lastSyncedContentRef.current.set(blockId, sanitized);
+        // Block is no longer stale once content was applied.
+        setStaleBlockId((cur) => (cur === blockId ? null : cur));
+        return;
+      }
+
+      // The block is focused AND incoming differs from current DOM.
+      // If incoming also differs from the last value we wrote, it must come
+      // from a remote/store sync — show a subtle hint instead of clobbering
+      // the user's caret.
+      if (lastSynced !== sanitized) {
+        setStaleBlockId(blockId);
+      }
+    },
+    []
+  );
+
+  // Reload the focused block's content from the store, replacing any
+  // in-flight local edits with the latest remote version.
+  const reloadStaleBlock = useCallback(() => {
+    if (!staleBlockId) return;
+    const block = doc.blocks.find((b) => b.id === staleBlockId);
+    const el = blockRefs.current.get(staleBlockId);
+    if (!block || !el) {
+      setStaleBlockId(null);
+      return;
     }
+    const sanitized = sanitize(block.content);
+    el.innerHTML = sanitized;
+    lastSyncedContentRef.current.set(staleBlockId, sanitized);
+    setStaleBlockId(null);
+  }, [staleBlockId, doc.blocks]);
+
+  // ----- Caret tracking for collaborative cursors -----
+  // Translate a (DOM node, offset) selection into (blockId, charOffset) so
+  // remote peers can render our caret without sharing the full DOM.
+  const computeCaret = useCallback(() => {
+    const sel = typeof window !== 'undefined' ? window.getSelection() : null;
+    if (!sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    // Find which block element contains the anchor.
+    let containerEl: HTMLElement | null = null;
+    let containerBlockId: string | null = null;
+    for (const [bid, el] of blockRefs.current.entries()) {
+      if (el.contains(range.startContainer)) {
+        containerEl = el;
+        containerBlockId = bid;
+        break;
+      }
+    }
+    if (!containerEl || !containerBlockId) return null;
+    // Compute character offset from start of block to range start.
+    const pre = document.createRange();
+    pre.selectNodeContents(containerEl);
+    pre.setEnd(range.startContainer, range.startOffset);
+    const offset = pre.toString().length;
+    let selectionLength = 0;
+    if (!range.collapsed) {
+      selectionLength = range.toString().length;
+    }
+    return { blockId: containerBlockId, offset, selectionLength };
   }, []);
+
+  useEffect(() => {
+    const onSelChange = () => {
+      const caret = computeCaret();
+      if (!caret) return;
+      // Only broadcast when focus is inside our editor.
+      if (!blocksContainerRef.current?.contains(document.activeElement)) return;
+      focusedBlockIdRef.current = caret.blockId;
+      broadcastCursor(caret.blockId, caret.offset, caret.selectionLength);
+    };
+    document.addEventListener('selectionchange', onSelChange);
+    return () => document.removeEventListener('selectionchange', onSelChange);
+  }, [computeCaret, broadcastCursor]);
+
+  // Clear remote caret + focus tracking on unmount/doc change.
+  useEffect(() => {
+    return () => {
+      focusedBlockIdRef.current = null;
+      lastSyncedContentRef.current.clear();
+      broadcastCursor(null, 0, 0);
+    };
+  }, [doc.id, broadcastCursor]);
 
   const renderBlockElement = (block: Block, index: number) => {
     if (block.type === 'divider') {
