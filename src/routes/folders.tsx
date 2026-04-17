@@ -482,20 +482,16 @@ function FoldersPage() {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
           <Lock size={14} /> My Folders
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
           {myFolders.map((folder, i) => {
-            const filesInFolder = folderFiles[folder.id] ?? [];
-            const idx = chipIndex[folder.id] ?? 0;
-            const latest = filesInFolder[idx];
-            const LatestIcon = latest ? fileTypeIcon(latest.mime_type) : null;
-            const hasMultiple = filesInFolder.length > 1;
+            const count = fileCounts[folder.id] ?? 0;
             const isDraggingOver = dragOverFolderId === folder.id;
             const isUploading = uploadingFolderId === folder.id;
             return (
               <motion.div
                 key={folder.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.04 }}
                 onDragOver={(e) => {
                   if (!e.dataTransfer.types.includes("Files")) return;
@@ -512,267 +508,120 @@ function FoldersPage() {
                   e.preventDefault();
                   handleDropFiles(folder.id, e.dataTransfer.files);
                 }}
-                className={`glass p-4 group relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30 ${
-                  isDraggingOver
-                    ? "ring-2 ring-primary/60 border-primary/40 bg-primary/5"
-                    : ""
-                }`}
-                style={
-                  folder.cover
-                    ? folder.cover.type === "color"
-                      ? { background: folder.cover.value }
-                      : {
-                          backgroundImage: `url(${folder.cover.value})`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }
-                    : undefined
-                }
+                className={`group relative flex flex-col items-center gap-2 p-4 rounded-2xl cursor-pointer select-none transition-all duration-150
+                  hover:bg-muted/40 active:scale-95
+                  ${isDraggingOver ? "bg-primary/10 ring-2 ring-primary/40" : ""}
+                `}
               >
-                {/* Readability scrim when a cover is set so text/icons stay legible.
-                    Sits below the click-target Link (z-0) so it never blocks clicks. */}
-                {folder.cover && (
-                  <div className="absolute inset-0 -z-10 bg-gradient-to-t from-background/85 via-background/55 to-background/30 pointer-events-none" />
-                )}
+                {/* Drop overlay */}
                 {(isDraggingOver || isUploading) && (
-                  <div className="absolute inset-0 z-10 rounded-lg bg-primary/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/90 border border-border/50 shadow-sm text-xs font-medium text-foreground">
-                      {isUploading ? (
-                        <>
-                          <Loader2 size={14} className="animate-spin text-primary" />
-                          Uploading…
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={14} className="text-primary" />
-                          Drop to upload to {folder.name}
-                        </>
-                      )}
+                  <div className="absolute inset-0 z-10 rounded-2xl bg-primary/10 flex items-center justify-center pointer-events-none">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/90 border border-border/50 text-xs font-medium text-foreground shadow">
+                      {isUploading ? <><Loader2 size={12} className="animate-spin text-primary" />Uploading…</> : <><Upload size={12} className="text-primary" />Drop files</>}
                     </div>
                   </div>
                 )}
 
-                {/* Whole-card click target — sits behind the content so action
-                    buttons and the file-preview chip remain interactive. */}
+                {/* Big folder icon — clicking opens the folder */}
                 <Link
                   to="/folders/$folderId"
                   params={{ folderId: folder.id }}
-                  className="absolute inset-0 z-0 rounded-lg"
+                  className="flex flex-col items-center gap-2 w-full"
                   aria-label={`Open folder ${folder.name}`}
-                />
-
-                <div className="relative z-[1] flex items-start justify-between gap-3 pointer-events-none">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <span className="text-2xl">{folder.icon}</span>
-                    <div className="min-w-0">
-                      <div className="font-medium text-foreground truncate">{folder.name}</div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <span>{formatItemCount(fileCounts[folder.id] ?? 0)}</span>
-                        <span>•</span>
-                        {folder.owner_id === user?.id ? (
-                          <>
-                            <Globe size={10} /> Owner
-                          </>
-                        ) : (
-                          <>
-                            <Lock size={10} /> Shared with you
-                          </>
-                        )}
+                >
+                  {/* Folder SVG — Windows/macOS style */}
+                  <div className="relative w-20 h-16 drop-shadow-md">
+                    <svg viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                      {/* Folder back */}
+                      <rect x="2" y="14" width="76" height="44" rx="5" fill="#F59E0B" opacity="0.9"/>
+                      {/* Folder tab */}
+                      <path d="M2 14 Q2 10 6 10 L28 10 Q32 10 34 14 Z" fill="#FBBF24"/>
+                      {/* Folder front highlight */}
+                      <rect x="2" y="18" width="76" height="40" rx="4" fill="#FCD34D" opacity="0.6"/>
+                      {/* Icon overlay */}
+                      <text x="40" y="44" textAnchor="middle" fontSize="20" fill="rgba(180,90,0,0.5)">{folder.icon}</text>
+                    </svg>
+                    {/* File count badge */}
+                    {count > 0 && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow">
+                        {count > 99 ? "99+" : count}
                       </div>
-                    </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0 opacity-100 pointer-events-auto relative z-[2]">
-                    <input
-                      type="file"
-                      multiple
-                      className="sr-only"
-                      id={`upload-input-${folder.id}`}
-                      onChange={(e) => {
-                        if (e.target.files?.length) {
-                          handleDropFiles(folder.id, e.target.files);
-                          e.target.value = "";
-                        }
-                      }}
-                    />
-                    <label
-                      htmlFor={`upload-input-${folder.id}`}
-                      className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-border/40 bg-muted/40 px-2.5 py-2 text-xs font-medium text-primary hover:bg-primary/10"
-                      title="Upload files to this folder"
-                      aria-label="Upload files to this folder"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Upload size={14} />
-                      <span className="hidden sm:inline">Upload</span>
-                    </label>
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setCoverPickerFolderId(
-                            coverPickerFolderId === folder.id ? null : folder.id
-                          );
-                        }}
-                        className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
-                        title="Customize cover (color, image, GIF)"
-                        aria-label="Customize folder cover"
-                      >
-                        <Palette size={14} />
-                      </button>
-                      <AnimatePresence>
-                        {coverPickerFolderId === folder.id && (
-                          <FolderCoverPicker
-                            folderId={folder.id}
-                            cover={folder.cover}
-                            onChange={(c) => saveCover(folder.id, c)}
-                            onClose={() => setCoverPickerFolderId(null)}
-                          />
-                        )}
-                      </AnimatePresence>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setSharingFolderId(sharingFolderId === folder.id ? null : folder.id);
-                      }}
-                      className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
-                      title="Share folder"
-                    >
-                      <Share2 size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        deleteFolder(folder.id);
-                      }}
-                      disabled={deletingFolderId === folder.id}
-                      className="p-2 rounded-lg hover:bg-destructive/10 text-destructive disabled:opacity-60 disabled:cursor-not-allowed"
-                      title="Delete folder"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  {/* Folder name */}
+                  <span className="text-xs font-medium text-foreground text-center leading-tight max-w-full px-1 truncate w-full text-center">
+                    {folder.name}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{formatItemCount(count)}</span>
+                </Link>
+
+                {/* Action buttons — only visible on hover, don't intercept folder click */}
+                <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <input
+                    type="file"
+                    multiple
+                    className="sr-only"
+                    id={`upload-input-${folder.id}`}
+                    onChange={(e) => {
+                      if (e.target.files?.length) {
+                        handleDropFiles(folder.id, e.target.files);
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor={`upload-input-${folder.id}`}
+                    className="p-1 rounded-md bg-background/80 hover:bg-primary/10 text-primary cursor-pointer"
+                    title="Upload files"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Upload size={12} />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSharingFolderId(sharingFolderId === folder.id ? null : folder.id); }}
+                    className="p-1 rounded-md bg-background/80 hover:bg-muted text-muted-foreground hover:text-foreground"
+                    title="Share folder"
+                  >
+                    <Share2 size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteFolder(folder.id); }}
+                    disabled={deletingFolderId === folder.id}
+                    className="p-1 rounded-md bg-background/80 hover:bg-destructive/10 text-destructive disabled:opacity-60"
+                    title="Delete folder"
+                  >
+                    <Trash2 size={12} />
+                  </button>
                 </div>
 
-                {/* File preview chip removed — click folder to view files */}
-                {false && latest && (
-                  <div
-                    className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors pointer-events-auto relative z-[2]"
-                    title={latest.file_name}
-                  >
-                    {hasMultiple && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          navigateChip(folder.id, -1);
-                        }}
-                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
-                        title="Previous file"
-                        aria-label="Previous file"
-                      >
-                        <ChevronLeft size={14} />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openPreview(latest);
-                      }}
-                      className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
-                      aria-label={`Open ${latest.file_name}`}
-                    >
-                      {latest.thumbUrl ? (
-                        <img
-                          src={latest.thumbUrl}
-                          alt={latest.file_name}
-                          className="w-10 h-10 rounded object-cover shrink-0"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded bg-background/60 flex items-center justify-center shrink-0">
-                          {LatestIcon ? <LatestIcon size={18} className="text-muted-foreground" /> : null}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1">
-                          {idx === 0 ? "Latest file" : "File"}
-                          {hasMultiple && (
-                            <span className="text-muted-foreground/50">
-                              · {idx + 1}/{filesInFolder.length}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-foreground truncate">{latest.file_name}</div>
-                      </div>
-                    </button>
-                    {hasMultiple && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          navigateChip(folder.id, 1);
-                        }}
-                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
-                        title="Next file"
-                        aria-label="Next file"
-                      >
-                        <ChevronRight size={14} />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        downloadFile(latest);
-                      }}
-                      disabled={downloadingId === latest.id}
-                      className="p-2 rounded-md hover:bg-primary/10 text-primary shrink-0 disabled:opacity-50"
-                      title="Download file"
-                      aria-label={`Download ${latest.file_name}`}
-                    >
-                      {downloadingId === latest.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Download size={14} />
-                      )}
-                    </button>
-                  </div>
-                )}
-
+                {/* Share panel — pops below the card */}
                 <AnimatePresence>
                   {sharingFolderId === folder.id && (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden pointer-events-auto relative z-[5]"
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      className="absolute top-full left-0 right-0 mt-1 z-20 glass rounded-xl p-3 shadow-xl"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-2">
+                      <div className="flex items-center gap-2">
                         <input
                           value={shareEmail}
                           onChange={(e) => setShareEmail(e.target.value)}
                           placeholder="Search user name…"
-                          className="flex-1 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/30 text-sm outline-none"
+                          autoFocus
+                          className="flex-1 px-2.5 py-1.5 rounded-lg bg-background border border-border/60 text-xs outline-none focus:ring-2 focus:ring-primary/30"
                           onKeyDown={(e) => e.key === "Enter" && shareFolder(folder.id)}
                         />
                         <button
                           type="button"
                           onClick={() => shareFolder(folder.id)}
                           disabled={sharingBusyFolderId === folder.id}
-                          className="px-3 py-1.5 rounded-lg gradient-accent text-white text-xs font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="px-2.5 py-1.5 rounded-lg gradient-accent text-white text-xs font-medium disabled:opacity-60"
                         >
-                          {sharingBusyFolderId === folder.id ? "Sharing…" : "Share"}
+                          {sharingBusyFolderId === folder.id ? "…" : "Share"}
                         </button>
                       </div>
                     </motion.div>
@@ -782,9 +631,9 @@ function FoldersPage() {
             );
           })}
           {myFolders.length === 0 && (
-            <div className="glass p-8 text-center col-span-2">
+            <div className="glass p-8 text-center col-span-4">
               <FolderLock size={36} className="mx-auto mb-3 text-muted-foreground/30" />
-              <p className="text-muted-foreground text-sm">No folders yet</p>
+              <p className="text-muted-foreground text-sm">No folders yet. Click + New Folder to create one.</p>
             </div>
           )}
         </div>

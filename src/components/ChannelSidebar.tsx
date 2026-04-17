@@ -4,8 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronDown, ChevronRight, Plus, Volume2, Hash, Trash2, FolderPlus, Bell,
+  ChevronDown, ChevronRight, Plus, Volume2, Hash, Trash2, FolderPlus, Bell, Mic, MicOff, PhoneOff,
 } from "lucide-react";
+import { useVoiceRoom } from "@/hooks/voice-room-context";
+import { playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
+import { toast } from "sonner";
 import { toast } from "sonner";
 import { ringChannel } from "@/lib/ring-actions";
 import {
@@ -39,6 +42,20 @@ interface Props {
 export function ChannelSidebar({ activeVoiceId, activeTextId, onJoinVoice }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const lk = useVoiceRoom();
+
+  const handleMute = async () => {
+    const muted = await lk.toggleMute();
+    if (muted) playMuteSound();
+    else playUnmuteSound();
+  };
+
+  const handleLeave = async () => {
+    await lk.disconnect();
+    lk.setActiveChannel(null);
+    playLeaveSound();
+    toast("Left voice channel");
+  };
   const [categories, setCategories] = useState<SidebarCategory[]>([]);
   const [channels, setChannels] = useState<SidebarChannel[]>([]);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -298,6 +315,48 @@ export function ChannelSidebar({ activeVoiceId, activeTextId, onJoinVoice }: Pro
           </div>
         )}
       </div>
+
+      {/* Voice status — shows when connected, pinned at bottom of sidebar */}
+      {lk.isConnected && lk.activeChannel && (
+        <div className="px-2 pb-2 pt-1 border-t border-border/30 shrink-0">
+          <div className="glass rounded-xl px-3 py-2 flex items-center gap-2">
+            <button
+              onClick={() => navigate({ to: "/voice", search: {} as any })}
+              className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition-opacity"
+              title="Open voice channel"
+            >
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75 animate-ping" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-foreground truncate">
+                  {lk.activeChannel.name}
+                </div>
+                <div className="text-[10px] text-muted-foreground">Voice connected</div>
+              </div>
+            </button>
+            <button
+              onClick={handleMute}
+              className={`p-1.5 rounded-lg transition-colors ${
+                lk.isMuted
+                  ? "bg-destructive/15 text-destructive hover:bg-destructive/25"
+                  : "hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+              }`}
+              title={lk.isMuted ? "Unmute" : "Mute"}
+            >
+              {lk.isMuted ? <MicOff size={13} /> : <Mic size={13} />}
+            </button>
+            <button
+              onClick={handleLeave}
+              className="p-1.5 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              title="Leave voice channel"
+            >
+              <PhoneOff size={13} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* New category dialog */}
       <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
