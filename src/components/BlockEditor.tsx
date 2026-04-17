@@ -167,6 +167,21 @@ export function BlockEditor({ doc }: BlockEditorProps) {
       )
     : BLOCK_TYPES;
 
+  const setBlockRef = useCallback((blockId: string, initialHtml: string) => (el: HTMLElement | null) => {
+    if (el) {
+      blockRefs.current.set(blockId, el);
+      // Only set innerHTML on mount or when external content differs from DOM.
+      // Never overwrite during typing — that resets the caret to position 0
+      // and makes characters appear reversed.
+      const sanitized = sanitize(initialHtml);
+      if (el.innerHTML !== sanitized && document.activeElement !== el) {
+        el.innerHTML = sanitized;
+      }
+    } else {
+      blockRefs.current.delete(blockId);
+    }
+  }, []);
+
   const renderBlockElement = (block: Block, index: number) => {
     if (block.type === 'divider') {
       return (
