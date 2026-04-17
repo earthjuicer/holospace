@@ -6,11 +6,12 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe, Upload,
   File as FileIcon, Image as ImageIcon, Video, Music, FileText, Loader2, Download,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Palette,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFileToFolder } from "@/lib/folder-upload";
 import { FilePreviewModal, type PreviewFile } from "@/components/FilePreviewModal";
+import { FolderCoverPicker, type FolderCover } from "@/components/FolderCoverPicker";
 
 export const Route = createFileRoute("/folders")({
   head: () => ({
@@ -28,6 +29,7 @@ interface Folder {
   icon: string;
   owner_id: string;
   created_at: string;
+  cover: FolderCover | null;
 }
 
 interface FolderShare {
@@ -83,6 +85,7 @@ function FoldersPage() {
   const [sharingBusyFolderId, setSharingBusyFolderId] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [coverPickerFolderId, setCoverPickerFolderId] = useState<string | null>(null);
 
   const downloadFile = async (file: LatestFile) => {
     setDownloadingId(file.id);
@@ -222,7 +225,16 @@ function FoldersPage() {
 
     if (!data) return;
 
-    setFolders(data);
+    setFolders(
+      data.map((row) => ({
+        id: row.id,
+        name: row.name,
+        icon: row.icon,
+        owner_id: row.owner_id,
+        created_at: row.created_at,
+        cover: (row.cover as unknown as FolderCover | null) ?? null,
+      }))
+    );
 
     if (data.length === 0) {
       setFileCounts({});
@@ -391,6 +403,19 @@ function FoldersPage() {
     }
   };
 
+  const saveCover = async (folderId: string, cover: FolderCover | null) => {
+    // Optimistic update so the picker preview feels instant.
+    setFolders((prev) => prev.map((f) => (f.id === folderId ? { ...f, cover } : f)));
+    const { error } = await supabase
+      .from("folders")
+      .update({ cover: cover as unknown as never })
+      .eq("id", folderId);
+    if (error) {
+      toast.error(error.message || "Failed to save cover");
+      fetchFolders();
+    }
+  };
+
   const myFolders = folders.filter((f) => f.owner_id === user?.id);
   const sharedWithMe = folders.filter(
     (f) => f.owner_id !== user?.id && shares.some((s) => s.folder_id === f.id)
@@ -487,12 +512,27 @@ function FoldersPage() {
                   e.preventDefault();
                   handleDropFiles(folder.id, e.dataTransfer.files);
                 }}
-                className={`glass p-4 group relative transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30 ${
+                className={`glass p-4 group relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30 ${
                   isDraggingOver
                     ? "ring-2 ring-primary/60 border-primary/40 bg-primary/5"
                     : ""
                 }`}
+                style={
+                  folder.cover
+                    ? folder.cover.type === "color"
+                      ? { background: folder.cover.value }
+                      : {
+                          backgroundImage: `url(${folder.cover.value})`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                        }
+                    : undefined
+                }
               >
+                {/* Readability scrim when a cover is set so text/icons stay legible. */}
+                {folder.cover && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/55 to-background/30 pointer-events-none" />
+                )}
                 {(isDraggingOver || isUploading) && (
                   <div className="absolute inset-0 z-10 rounded-lg bg-primary/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/90 border border-border/50 shadow-sm text-xs font-medium text-foreground">
@@ -563,6 +603,33 @@ function FoldersPage() {
                       <Upload size={14} />
                       <span className="hidden sm:inline">Upload</span>
                     </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setCoverPickerFolderId(
+                            coverPickerFolderId === folder.id ? null : folder.id
+                          );
+                        }}
+                        className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
+                        title="Customize cover (color, image, GIF)"
+                        aria-label="Customize folder cover"
+                      >
+                        <Palette size={14} />
+                      </button>
+                      <AnimatePresence>
+                        {coverPickerFolderId === folder.id && (
+                          <FolderCoverPicker
+                            folderId={folder.id}
+                            cover={folder.cover}
+                            onChange={(c) => saveCover(folder.id, c)}
+                            onClose={() => setCoverPickerFolderId(null)}
+                          />
+                        )}
+                      </AnimatePresence>
+                    </div>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -739,12 +806,54 @@ function FoldersPage() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.04 }}
-                    className="glass p-0 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30"
+                    className="glass p-0 relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30"
+                    style={
+                      folder.cover
+                        ? folder.cover.type === "color"
+                          ? { background: folder.cover.value }
+                          : {
+                              backgroundImage: `url(${folder.cover.value})`,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                            }
+                        : undefined
+                    }
                   >
+                    {folder.cover && (
+                      <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/55 to-background/30 pointer-events-none" />
+                    )}
+                    {/* Customize button for editors (shared users) */}
+                    <div className="absolute top-2 right-2 z-[3]">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setCoverPickerFolderId(
+                            coverPickerFolderId === folder.id ? null : folder.id
+                          );
+                        }}
+                        className="p-1.5 rounded-lg bg-background/70 backdrop-blur-sm hover:bg-background text-muted-foreground hover:text-foreground"
+                        title="Customize cover"
+                        aria-label="Customize folder cover"
+                      >
+                        <Palette size={13} />
+                      </button>
+                      <AnimatePresence>
+                        {coverPickerFolderId === folder.id && (
+                          <FolderCoverPicker
+                            folderId={folder.id}
+                            cover={folder.cover}
+                            onChange={(c) => saveCover(folder.id, c)}
+                            onClose={() => setCoverPickerFolderId(null)}
+                          />
+                        )}
+                      </AnimatePresence>
+                    </div>
                     <Link
                       to="/folders/$folderId"
                       params={{ folderId: folder.id }}
-                      className="block p-4 hover:bg-muted/20 transition-colors"
+                      className="block p-4 hover:bg-muted/20 transition-colors relative z-[1]"
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">{folder.icon}</span>
