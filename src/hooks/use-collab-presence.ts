@@ -44,52 +44,83 @@ export function useCollabPresence(docId: string) {
 
   useEffect(() => {
     if (!user || !docId) return;
-    const me: PresencePayload = {
-      userId: user.id,
-      name:
+    let cancelled = false;
+
+    // Resolve a friendly display name. Prefer the profile row (display_name /
+    // username) over auth metadata, since email/password signups have empty
+    // user_metadata and would otherwise fall back to the email prefix.
+    const resolveName = async (): Promise<string> => {
+      const metaName =
         (user.user_metadata?.full_name as string | undefined) ??
-        (user.user_metadata?.name as string | undefined) ??
-        user.email?.split('@')[0] ??
-        'Someone',
-      color: colorFor(user.id),
-      blockId: null,
-      offset: 0,
-      selectionLength: 0,
-    };
-    meRef.current = me;
-
-    const channel = supabase.channel(`doc-presence:${docId}`, {
-      config: { presence: { key: user.id } },
-    });
-    channelRef.current = channel;
-
-    const refreshRemote = () => {
-      const state = channel.presenceState() as Record<string, PresencePayload[]>;
-      const list: CollabCursor[] = [];
-      const now = Date.now();
-      for (const key of Object.keys(state)) {
-        if (key === user.id) continue;
-        const entry = state[key]?.[0];
-        if (!entry) continue;
-        list.push({ ...entry, updatedAt: now });
+        (user.user_metadata?.name as string | undefined);
+      if (metaName) return metaName;
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('display_name, username')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (data?.display_name) return data.display_name;
+        if (data?.username) return data.username;
+      } catch {
+        // ignore — fall back below
       }
-      setRemote(list);
+      return user.email?.split('@')[0] ?? 'Someone';
     };
 
-    channel
-      .on('presence', { event: 'sync' }, refreshRemote)
-      .on('presence', { event: 'join' }, refreshRemote)
-      .on('presence', { event: 'leave' }, refreshRemote)
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track(me);
-        }
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    (async () => {
+      const name = await resolveName();
+      if (cancelled) return;
+
+      const me: PresencePayload = {
+        userId: user.id,
+        name,
+        color: colorFor(user.id),
+        blockId: null,
+        offset: 0,
+        selectionLength: 0,
+      };
+      meRef.current = me;
+
+      channel = supabase.channel(`doc-presence:${docId}`, {
+        config: { presence: { key: user.id } },
       });
+      channelRef.current = channel;
+
+      const refreshRemote = () => {
+        if (!channel) return;
+        const state = channel.presenceState() as Record<string, PresencePayload[]>;
+        const list: CollabCursor[] = [];
+        const now = Date.now();
+        for (const key of Object.keys(state)) {
+          if (key === user.id) continue;
+          const entry = state[key]?.[0];
+          if (!entry) continue;
+          list.push({ ...entry, updatedAt: now });
+        }
+        setRemote(list);
+      };
+
+      channel
+        .on('presence', { event: 'sync' }, refreshRemote)
+        .on('presence', { event: 'join' }, refreshRemote)
+        .on('presence', { event: 'leave' }, refreshRemote)
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED' && channel) {
+            await channel.track(me);
+          }
+        });
+    })();
 
     return () => {
+      cancelled = true;
       if (pendingRef.current) clearTimeout(pendingRef.current);
-      channel.untrack().catch(() => {});
-      supabase.removeChannel(channel);
+      if (channel) {
+        channel.untrack().catch(() => {});
+        supabase.removeChannel(channel);
+      }
       channelRef.current = null;
       meRef.current = null;
     };
