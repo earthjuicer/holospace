@@ -156,6 +156,11 @@ export function BlockEditor({ doc }: BlockEditorProps) {
         setSlashMenuBlockId(null);
       }
 
+      // Track what we just wrote so the ref reconciler can distinguish
+      // local typing from remote/store updates.
+      lastSyncedContentRef.current.set(block.id, content);
+      // The user just typed — clear any 'updated elsewhere' hint for this block.
+      setStaleBlockId((cur) => (cur === block.id ? null : cur));
       updateBlock(doc.id, block.id, { content });
       triggerSave();
     },
