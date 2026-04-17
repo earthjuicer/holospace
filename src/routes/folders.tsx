@@ -85,6 +85,7 @@ function FoldersPage() {
   const [sharingBusyFolderId, setSharingBusyFolderId] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [coverPickerFolderId, setCoverPickerFolderId] = useState<string | null>(null);
 
   const downloadFile = async (file: LatestFile) => {
     setDownloadingId(file.id);
