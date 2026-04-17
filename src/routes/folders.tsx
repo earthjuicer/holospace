@@ -512,12 +512,27 @@ function FoldersPage() {
                   e.preventDefault();
                   handleDropFiles(folder.id, e.dataTransfer.files);
                 }}
-                className={`glass p-4 group relative transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30 ${
+                className={`glass p-4 group relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30 ${
                   isDraggingOver
                     ? "ring-2 ring-primary/60 border-primary/40 bg-primary/5"
                     : ""
                 }`}
+                style={
+                  folder.cover
+                    ? folder.cover.type === "color"
+                      ? { background: folder.cover.value }
+                      : {
+                          backgroundImage: `url(${folder.cover.value})`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                        }
+                    : undefined
+                }
               >
+                {/* Readability scrim when a cover is set so text/icons stay legible. */}
+                {folder.cover && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/55 to-background/30 pointer-events-none" />
+                )}
                 {(isDraggingOver || isUploading) && (
                   <div className="absolute inset-0 z-10 rounded-lg bg-primary/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/90 border border-border/50 shadow-sm text-xs font-medium text-foreground">
