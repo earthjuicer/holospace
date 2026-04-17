@@ -603,6 +603,33 @@ function FoldersPage() {
                       <Upload size={14} />
                       <span className="hidden sm:inline">Upload</span>
                     </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setCoverPickerFolderId(
+                            coverPickerFolderId === folder.id ? null : folder.id
+                          );
+                        }}
+                        className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground"
+                        title="Customize cover (color, image, GIF)"
+                        aria-label="Customize folder cover"
+                      >
+                        <Palette size={14} />
+                      </button>
+                      <AnimatePresence>
+                        {coverPickerFolderId === folder.id && (
+                          <FolderCoverPicker
+                            folderId={folder.id}
+                            cover={folder.cover}
+                            onChange={(c) => saveCover(folder.id, c)}
+                            onClose={() => setCoverPickerFolderId(null)}
+                          />
+                        )}
+                      </AnimatePresence>
+                    </div>
                     <button
                       type="button"
                       onClick={(e) => {
