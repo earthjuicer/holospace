@@ -593,7 +593,7 @@ function FoldersPage() {
 
                 {latest && (
                   <div
-                    className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors"
+                    className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2 hover:bg-muted/50 transition-colors pointer-events-auto relative z-[2]"
                     title={latest.file_name}
                   >
                     {hasMultiple && (
