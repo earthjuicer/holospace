@@ -416,7 +416,7 @@ function FoldersPage() {
     }
   };
 
-
+  const myFolders = folders.filter((f) => f.owner_id === user?.id);
   const sharedWithMe = folders.filter(
     (f) => f.owner_id !== user?.id && shares.some((s) => s.folder_id === f.id)
   );
