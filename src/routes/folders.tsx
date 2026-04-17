@@ -225,7 +225,16 @@ function FoldersPage() {
 
     if (!data) return;
 
-    setFolders(data);
+    setFolders(
+      data.map((row) => ({
+        id: row.id,
+        name: row.name,
+        icon: row.icon,
+        owner_id: row.owner_id,
+        created_at: row.created_at,
+        cover: (row.cover as unknown as FolderCover | null) ?? null,
+      }))
+    );
 
     if (data.length === 0) {
       setFileCounts({});
