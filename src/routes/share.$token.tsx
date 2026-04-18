@@ -7,7 +7,7 @@ import { Clock, FolderLock } from "lucide-react";
 
 export const Route = createFileRoute("/share/$token")({
   head: () => ({
-    meta: [{ title: "Shared folder" }],
+    meta: [{ title: "Shared drive" }],
   }),
   component: SharePage,
 });
@@ -89,7 +89,7 @@ function SharePage() {
                   {info.folder_name}
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Shared folder · view, download, and upload
+                  Shared drive · view, download, and upload
                 </p>
               </div>
             </div>
