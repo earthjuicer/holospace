@@ -512,6 +512,7 @@ function FoldersPage() {
                   hover:bg-muted/40 active:scale-95
                   ${isDraggingOver ? "bg-primary/10 ring-2 ring-primary/40" : ""}
                 `}
+                onClick={() => navigate({ to: "/folders/$folderId", params: { folderId: folder.id } })}
               >
                 {/* Drop overlay */}
                 {(isDraggingOver || isUploading) && (
@@ -522,13 +523,8 @@ function FoldersPage() {
                   </div>
                 )}
 
-                {/* Big folder icon — clicking opens the folder */}
-                <Link
-                  to="/folders/$folderId"
-                  params={{ folderId: folder.id }}
-                  className="flex flex-col items-center gap-2 w-full"
-                  aria-label={`Open folder ${folder.name}`}
-                >
+                {/* Big folder icon — whole card is clickable via motion.div onClick */}
+                <div className="flex flex-col items-center gap-2 w-full">
                   {/* Folder SVG — Windows/macOS style */}
                   <div className="relative w-20 h-16 drop-shadow-md">
                     <svg viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
@@ -553,7 +549,7 @@ function FoldersPage() {
                     {folder.name}
                   </span>
                   <span className="text-[10px] text-muted-foreground">{formatItemCount(count)}</span>
-                </Link>
+                </div>
 
                 {/* Action buttons — only visible on hover, don't intercept folder click */}
                 <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -644,167 +640,40 @@ function FoldersPage() {
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Users size={14} /> Shared with me
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {sharedWithMe.map((folder, i) => {
-                const filesInFolder = folderFiles[folder.id] ?? [];
-                const idx = chipIndex[folder.id] ?? 0;
-                const latest = filesInFolder[idx];
-                const LatestIcon = latest ? fileTypeIcon(latest.mime_type) : null;
-                const hasMultiple = filesInFolder.length > 1;
+                const count = fileCounts[folder.id] ?? 0;
                 return (
                   <motion.div
                     key={folder.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.04 }}
-                    className="glass p-0 relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg hover:border-primary/30"
-                    style={
-                      folder.cover
-                        ? folder.cover.type === "color"
-                          ? { background: folder.cover.value }
-                          : {
-                              backgroundImage: `url(${folder.cover.value})`,
-                              backgroundSize: "cover",
-                              backgroundPosition: "center",
-                            }
-                        : undefined
-                    }
+                    className="group relative flex flex-col items-center gap-2 p-4 rounded-2xl cursor-pointer select-none transition-all duration-150 hover:bg-muted/40 active:scale-95"
+                    onClick={() => navigate({ to: "/folders/$folderId", params: { folderId: folder.id } })}
                   >
-                    {folder.cover && (
-                      <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/55 to-background/30 pointer-events-none" />
-                    )}
-                    {/* Customize button for editors (shared users) */}
-                    <div className="absolute top-2 right-2 z-[3]">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setCoverPickerFolderId(
-                            coverPickerFolderId === folder.id ? null : folder.id
-                          );
-                        }}
-                        className="p-1.5 rounded-lg bg-background/70 backdrop-blur-sm hover:bg-background text-muted-foreground hover:text-foreground"
-                        title="Customize cover"
-                        aria-label="Customize folder cover"
-                      >
-                        <Palette size={13} />
-                      </button>
-                      <AnimatePresence>
-                        {coverPickerFolderId === folder.id && (
-                          <FolderCoverPicker
-                            folderId={folder.id}
-                            cover={folder.cover}
-                            onChange={(c) => saveCover(folder.id, c)}
-                            onClose={() => setCoverPickerFolderId(null)}
-                          />
-                        )}
-                      </AnimatePresence>
-                    </div>
-                    <Link
-                      to="/folders/$folderId"
-                      params={{ folderId: folder.id }}
-                      className="block p-4 hover:bg-muted/20 transition-colors relative z-[1]"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{folder.icon}</span>
-                        <div className="min-w-0">
-                          <div className="font-medium text-foreground truncate">{folder.name}</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Share2 size={10} /> Shared with you • {formatItemCount(fileCounts[folder.id] ?? 0)}
+                    {/* Same PC-style folder card for shared folders */}
+                    <div className="flex flex-col items-center gap-2 w-full">
+                      <div className="relative w-20 h-16 drop-shadow-md">
+                        <svg viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                          <rect x="2" y="14" width="76" height="44" rx="5" fill="#60A5FA" opacity="0.9"/>
+                          <path d="M2 14 Q2 10 6 10 L28 10 Q32 10 34 14 Z" fill="#93C5FD"/>
+                          <rect x="2" y="18" width="76" height="40" rx="4" fill="#BFDBFE" opacity="0.6"/>
+                          <text x="40" y="44" textAnchor="middle" fontSize="20" fill="rgba(30,64,175,0.5)">{folder.icon}</text>
+                        </svg>
+                        {(fileCounts[folder.id] ?? 0) > 0 && (
+                          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center shadow">
+                            {(fileCounts[folder.id] ?? 0) > 99 ? "99+" : fileCounts[folder.id]}
                           </div>
-                        </div>
+                        )}
                       </div>
-                      {latest && (
-                        <div
-                          className="mt-3 flex items-center gap-1.5 rounded-lg border border-border/30 bg-muted/30 p-2"
-                          title={latest.file_name}
-                        >
-                          {hasMultiple && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                navigateChip(folder.id, -1);
-                              }}
-                              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
-                              title="Previous file"
-                              aria-label="Previous file"
-                            >
-                              <ChevronLeft size={14} />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              openPreview(latest);
-                            }}
-                            className="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:opacity-80"
-                            aria-label={`Open ${latest.file_name}`}
-                          >
-                            {latest.thumbUrl ? (
-                              <img
-                                src={latest.thumbUrl}
-                                alt={latest.file_name}
-                                className="w-10 h-10 rounded object-cover shrink-0"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded bg-background/60 flex items-center justify-center shrink-0">
-                                {LatestIcon ? <LatestIcon size={18} className="text-muted-foreground" /> : null}
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1">
-                                {idx === 0 ? "Latest file" : "File"}
-                                {hasMultiple && (
-                                  <span className="text-muted-foreground/50">
-                                    · {idx + 1}/{filesInFolder.length}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-foreground truncate">{latest.file_name}</div>
-                            </div>
-                          </button>
-                          {hasMultiple && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                navigateChip(folder.id, 1);
-                              }}
-                              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
-                              title="Next file"
-                              aria-label="Next file"
-                            >
-                              <ChevronRight size={14} />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              downloadFile(latest);
-                            }}
-                            disabled={downloadingId === latest.id}
-                            className="p-2 rounded-md hover:bg-primary/10 text-primary shrink-0 disabled:opacity-50"
-                            title="Download file"
-                            aria-label={`Download ${latest.file_name}`}
-                          >
-                            {downloadingId === latest.id ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <Download size={14} />
-                            )}
-                          </button>
-                        </div>
-                      )}
-                    </Link>
+                      <span className="text-xs font-medium text-foreground text-center leading-tight truncate w-full text-center px-1">
+                        {folder.name}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <Share2 size={9} /> {formatItemCount(fileCounts[folder.id] ?? 0)}
+                      </span>
+                    </div>
                   </motion.div>
                 );
               })}
