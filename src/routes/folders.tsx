@@ -454,7 +454,11 @@ function DrivePage() {
       .order("created_at", { ascending: false });
 
     if (currentFolder) {
+      // Inside a folder — show only that folder's files
       fileQuery = fileQuery.eq("folder_id", currentFolder.id);
+    } else {
+      // Root level — show files with no folder (null) AND files owned by this user
+      fileQuery = fileQuery.is("folder_id", null);
     }
 
     const [{ data: fd }, { data: fileData }] = await Promise.all([
@@ -526,21 +530,27 @@ function DrivePage() {
     let done = 0;
     for (const file of Array.from(fileList)) {
       try {
-        const ext = file.name.split(".").pop();
-        const path = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        // Path MUST start with user.id so RLS policy allows the upload
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}_${safeName}`;
         await uploadResumable({
           bucket: BUCKET,
           path,
           file,
           onProgress: (pct) => setUploadProgress(Math.round((done / fileList.length + pct / 100 / fileList.length) * 100)),
         });
-        await supabase.from("folder_files").insert({
-          folder_id: currentFolder?.id ?? null,
+        // Insert metadata — folder_id is nullable (null = root/My Drive)
+        const insertData: Record<string, unknown> = {
           file_name: file.name,
           size_bytes: file.size,
           mime_type: file.type || null,
           storage_path: path,
-        });
+        };
+        if (currentFolder?.id) {
+          insertData.folder_id = currentFolder.id;
+        }
+        const { error: dbErr } = await supabase.from("folder_files").insert(insertData);
+        if (dbErr) throw new Error(dbErr.message);
         done++;
       } catch (e: any) {
         toast.error(`${file.name}: ${e?.message ?? "Upload failed"}`);
