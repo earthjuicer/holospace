@@ -92,13 +92,15 @@ function VoiceInvitePage() {
     const addShare = (p: Participant) => {
       const videoPub = p.getTrackPublication(Track.Source.ScreenShare);
       const audioPub = p.getTrackPublication(Track.Source.ScreenShareAudio);
-      const videoTrack = videoPub?.track?.mediaStreamTrack;
-      if (videoPub && !videoPub.isMuted && videoTrack) {
+      const videoMediaTrack = videoPub?.track?.mediaStreamTrack;
+      if (videoPub && !videoPub.isMuted && videoMediaTrack) {
         list.push({
           participantId: p.identity,
           participantName: p.name || p.identity,
-          videoTrack,
-          audioTrack: audioPub?.track?.mediaStreamTrack,
+          videoTrack: videoPub.track,
+          audioTrack: audioPub?.track,
+          videoMediaTrack,
+          audioMediaTrack: audioPub?.track?.mediaStreamTrack,
         });
       }
     };
