@@ -534,22 +534,18 @@ function DrivePage() {
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
         const path = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}_${safeName}`;
         await uploadResumable({
-          bucket: BUCKET,
           path,
           file,
           onProgress: (pct) => setUploadProgress(Math.round((done / fileList.length + pct / 100 / fileList.length) * 100)),
         });
         // Insert metadata — folder_id is nullable (null = root/My Drive)
-        const insertData: Record<string, unknown> = {
+        const { error: dbErr } = await supabase.from("folder_files").insert({
           file_name: file.name,
           size_bytes: file.size,
           mime_type: file.type || null,
           storage_path: path,
-        };
-        if (currentFolder?.id) {
-          insertData.folder_id = currentFolder.id;
-        }
-        const { error: dbErr } = await supabase.from("folder_files").insert(insertData);
+          folder_id: currentFolder?.id ?? null,
+        });
         if (dbErr) throw new Error(dbErr.message);
         done++;
       } catch (e: any) {

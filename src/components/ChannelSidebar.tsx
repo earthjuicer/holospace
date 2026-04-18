@@ -9,7 +9,6 @@ import {
 import { useVoiceRoom } from "@/hooks/voice-room-context";
 import { playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/voice-sounds";
 import { toast } from "sonner";
-import { toast } from "sonner";
 import { ringChannel } from "@/lib/ring-actions";
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
