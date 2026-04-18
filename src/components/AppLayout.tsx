@@ -13,6 +13,7 @@ import { VoiceStatusBar } from './VoiceStatusBar';
 import { VoiceRoomProvider } from '@/hooks/voice-room-context';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Toaster } from 'sonner';
+import { MentionNotifications } from './MentionNotifications';
 
 const PUBLIC_ROUTES = [
   '/login',
@@ -167,6 +168,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <Onboarding />
       <IncomingRing />
       <VoiceStatusBar />
+      <MentionNotifications />
       <Toaster position="top-center" />
     </VoiceRoomProvider>
   );

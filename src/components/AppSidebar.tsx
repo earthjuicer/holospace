@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
@@ -6,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import {
   Home, FileText, Kanban, Calendar, Settings, Search, Plus, Star,
   ChevronRight, PanelLeftClose, PanelLeft, Volume2, FolderLock, LogOut, User,
-  Sun, Moon, Sparkles,
+  Sun, Moon, Sparkles, Bell,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -22,6 +23,26 @@ const NAV_ITEMS = [
 export function AppSidebar() {
   const { documents, sidebarOpen, toggleSidebar, addDocument, toggleFavorite, settings, updateSettings } = useAppStore();
   const { user, signOut } = useAuth();
+  const [unreadMentions, setUnreadMentions] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_id", user.id)
+      .is("read_at", null)
+      .then(({ count }) => setUnreadMentions(count ?? 0));
+
+    const sub = supabase
+      .channel(`sidebar-notifs-${user.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` },
+        () => setUnreadMentions((n) => n + 1))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` },
+        () => supabase.from("notifications").select("id", { count: "exact", head: true }).eq("recipient_id", user.id).is("read_at", null).then(({ count }) => setUnreadMentions(count ?? 0)))
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [user?.id]);
   const location = useLocation();
   const navigate = useNavigate();
   const [searchFilter, setSearchFilter] = useState('');
@@ -94,10 +115,39 @@ export function AppSidebar() {
                 }`}
               >
                 <item.icon size={18} />
-                {sidebarOpen && <span className="truncate">{item.label}</span>}
+                {sidebarOpen && <span className="flex-1 truncate">{item.label}</span>}
               </Link>
             );
           })}
+          {/* Mentions / notifications */}
+          <button
+            onClick={async () => {
+              if (!user) return;
+              await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("recipient_id", user.id).is("read_at", null);
+              setUnreadMentions(0);
+            }}
+            className="relative flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm transition-all w-full text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            title="Mentions"
+          >
+            <div className="relative">
+              <Bell size={18} />
+              {unreadMentions > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-destructive text-white text-[9px] font-bold flex items-center justify-center">
+                  {unreadMentions > 9 ? "9+" : unreadMentions}
+                </span>
+              )}
+            </div>
+            {sidebarOpen && (
+              <span className="flex-1 truncate text-left">
+                Mentions
+                {unreadMentions > 0 && (
+                  <span className="ml-1.5 text-xs font-semibold text-destructive">
+                    {unreadMentions} new
+                  </span>
+                )}
+              </span>
+            )}
+          </button>
         </div>
 
         {sidebarOpen && (

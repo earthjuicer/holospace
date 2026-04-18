@@ -292,14 +292,44 @@ function TextChannelPage() {
     const content = draft.trim();
     setDraft("");
     setMentionQuery(null);
-    const { error } = await supabase.from("text_messages").insert({
+
+    // Insert the message
+    const { data: msgData, error } = await supabase.from("text_messages").insert({
       channel_id: channelId,
       author_id: user.id,
       content,
-    });
+    }).select("id").maybeSingle();
+
     if (error) {
       toast.error("Could not send message");
       setDraft(content);
+      return;
+    }
+
+    // Detect @mentions and notify each pinged user in real time
+    const mentionMatches = content.match(/@(\w+)/g);
+    if (mentionMatches && workspaceUsers.length > 0) {
+      const mentionedNames = mentionMatches.map((m) => m.slice(1).toLowerCase());
+      const mentionedUsers = workspaceUsers.filter((u) => {
+        const name = (u.display_name || u.username || "").toLowerCase().replace(/\s+/g, "");
+        return mentionedNames.some((mn) => name.includes(mn) || mn.includes(name));
+      });
+
+      // Insert a notification row for each mentioned user (skip self)
+      const notifRows = mentionedUsers
+        .filter((u) => u.user_id !== user.id)
+        .map((u) => ({
+          recipient_id: u.user_id,
+          actor_id: user.id,
+          type: "mention",
+          channel_id: channelId,
+          message_id: msgData?.id ?? null,
+          preview: content.length > 80 ? content.slice(0, 80) + "…" : content,
+        }));
+
+      if (notifRows.length > 0) {
+        await supabase.from("notifications").insert(notifRows);
+      }
     }
   };
 
