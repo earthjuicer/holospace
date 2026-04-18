@@ -1,61 +1,54 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  FolderLock, FolderOpen, Plus, Share2, Trash2, Users, Lock, Globe, Upload,
-  File as FileIcon, Image as ImageIcon, Video, Music, FileText, Loader2, Download,
-  ChevronLeft, ChevronRight, Palette,
+  Upload, FolderPlus, Search, Grid3X3, List, Download, Trash2,
+  Share2, Link2, Copy, Check, X, Loader2, File as FileIcon,
+  Image as ImageIcon, Video, Music, FileText, FolderOpen,
+  MoreVertical, Users, Globe, Lock, ChevronRight, Home,
 } from "lucide-react";
 import { toast } from "sonner";
-import { uploadFileToFolder } from "@/lib/folder-upload";
+import { uploadResumable } from "@/lib/resumable-upload";
 import { FilePreviewModal, type PreviewFile } from "@/components/FilePreviewModal";
-import { FolderCoverPicker, type FolderCover } from "@/components/FolderCoverPicker";
 
 export const Route = createFileRoute("/folders")({
-  head: () => ({
-    meta: [
-      { title: "Folders — Workspace" },
-      { name: "description", content: "Manage your private and shared folders." },
-    ],
-  }),
-  component: FoldersPage,
+  head: () => ({ meta: [{ title: "Drive — Workspace" }] }),
+  component: DrivePage,
 });
 
-interface Folder {
+interface DriveFile {
+  id: string;
+  file_name: string;
+  size_bytes: number;
+  mime_type: string | null;
+  storage_path: string;
+  created_at: string;
+  folder_id: string;
+}
+
+interface DriveFolder {
   id: string;
   name: string;
   icon: string;
   owner_id: string;
   created_at: string;
-  cover: FolderCover | null;
 }
 
-interface FolderShare {
-  id: string;
-  folder_id: string;
-  shared_with_user_id: string;
+interface ShareRow {
+  user_id: string;
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
   role: string;
+  share_id: string;
 }
 
-function formatItemCount(count: number) {
-  if (count === 0) return "No items yet";
-  if (count === 1) return "1 item";
-  return `${count} items`;
-}
+const BUCKET = "folder-files";
 
-interface LatestFile {
-  id: string;
-  file_name: string;
-  mime_type: string | null;
-  storage_path: string;
-  size_bytes: number;
-  /** Signed URL for image previews; only set when mime starts with image/. */
-  thumbUrl?: string;
-}
-
-function fileTypeIcon(mime: string | null) {
+function fileIcon(mime: string | null) {
   if (!mime) return FileIcon;
   if (mime.startsWith("image/")) return ImageIcon;
   if (mime.startsWith("video/")) return Video;
@@ -64,624 +57,896 @@ function fileTypeIcon(mime: string | null) {
   return FileIcon;
 }
 
-function FoldersPage() {
+function formatBytes(b: number) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 ** 2) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 ** 3) return `${(b / 1024 ** 2).toFixed(1)} MB`;
+  return `${(b / 1024 ** 3).toFixed(2)} GB`;
+}
+
+// ── Share Modal ─────────────────────────────────────────────────────────────
+function ShareModal({
+  folder,
+  onClose,
+}: {
+  folder: DriveFolder;
+  onClose: () => void;
+}) {
   const { user } = useAuth();
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [shares, setShares] = useState<FolderShare[]>([]);
-  const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
-  // All files per folder (most-recent first), used for the chip's prev/next nav.
-  const [folderFiles, setFolderFiles] = useState<Record<string, LatestFile[]>>({});
-  // Per-folder index into folderFiles[folderId] (0 = newest).
-  const [chipIndex, setChipIndex] = useState<Record<string, number>>({});
-  // Folder IDs that currently have files being dropped onto them.
-  const [uploadingFolderId, setUploadingFolderId] = useState<string | null>(null);
-  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [shareEmail, setShareEmail] = useState("");
-  const [sharingFolderId, setSharingFolderId] = useState<string | null>(null);
-  const [creatingFolder, setCreatingFolder] = useState(false);
-  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
-  const [sharingBusyFolderId, setSharingBusyFolderId] = useState<string | null>(null);
-  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [coverPickerFolderId, setCoverPickerFolderId] = useState<string | null>(null);
-
-  const downloadFile = async (file: LatestFile) => {
-    setDownloadingId(file.id);
-    try {
-      const { data, error } = await supabase.storage
-        .from("folder-files")
-        .createSignedUrl(file.storage_path, 60, { download: file.file_name });
-      if (error || !data?.signedUrl) throw error ?? new Error("No URL");
-      const a = document.createElement("a");
-      a.href = data.signedUrl;
-      a.download = file.file_name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Download failed");
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
-  // Move chip to next/prev file in this folder. Lazily signs image thumbnails
-  // when navigating into them so we don't pay the cost up-front for every file.
-  const navigateChip = async (folderId: string, dir: 1 | -1) => {
-    const files = folderFiles[folderId];
-    if (!files || files.length < 2) return;
-    const cur = chipIndex[folderId] ?? 0;
-    const nextIdx = (cur + dir + files.length) % files.length;
-    setChipIndex((p) => ({ ...p, [folderId]: nextIdx }));
-    const target = files[nextIdx];
-    if (target.thumbUrl || !target.mime_type?.startsWith("image/")) return;
-    const { data: signed } = await supabase.storage
-      .from("folder-files")
-      .createSignedUrl(target.storage_path, 600);
-    if (!signed?.signedUrl) return;
-    setFolderFiles((prev) => {
-      const list = prev[folderId];
-      if (!list) return prev;
-      const updated = [...list];
-      updated[nextIdx] = { ...updated[nextIdx], thumbUrl: signed.signedUrl };
-      return { ...prev, [folderId]: updated };
-    });
-  };
-
-  const openPreview = (file: LatestFile) => {
-    setPreviewFile({
-      id: file.id,
-      file_name: file.file_name,
-      mime_type: file.mime_type,
-      storage_path: file.storage_path,
-      size_bytes: file.size_bytes,
-    });
-  };
+  const [members, setMembers] = useState<ShareRow[]>([]);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState<{ user_id: string; display_name: string | null; username: string | null; avatar_url: string | null }[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [publicLink, setPublicLink] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!user) return;
-    fetchFolders();
-    fetchShares();
+    loadMembers();
+    loadPublicLink();
+  }, [folder.id]);
 
-    // Auto-refresh: re-fetch whenever folders, shares, or files change anywhere
-    // in the workspace. Coalesce bursts so rapid edits trigger one fetch.
-    let t: ReturnType<typeof setTimeout> | null = null;
-    const schedule = (fn: () => void) => {
-      if (t) clearTimeout(t);
-      t = setTimeout(fn, 200);
-    };
+  const loadMembers = async () => {
+    const { data: shares } = await supabase
+      .from("folder_shares")
+      .select("id, shared_with_user_id, role")
+      .eq("folder_id", folder.id);
+    if (!shares?.length) { setMembers([]); return; }
+    const ids = shares.map((s) => s.shared_with_user_id);
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, display_name, username, avatar_url")
+      .in("user_id", ids);
+    const map = new Map((profiles ?? []).map((p) => [p.user_id, p]));
+    setMembers(shares.map((s) => ({
+      user_id: s.shared_with_user_id,
+      display_name: map.get(s.shared_with_user_id)?.display_name ?? null,
+      username: map.get(s.shared_with_user_id)?.username ?? null,
+      avatar_url: map.get(s.shared_with_user_id)?.avatar_url ?? null,
+      role: s.role,
+      share_id: s.id,
+    })));
+  };
 
-    const sub = supabase
-      .channel(`folders-page-${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "folders" },
-        () => schedule(fetchFolders)
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "folder_files" },
-        () => schedule(fetchFolders)
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "folder_shares" },
-        (payload) => {
-          schedule(fetchFolders);
-          schedule(fetchShares);
-
-          // Toast the recipient when a NEW share lands for them. We look up
-          // the folder name + owner display name so the message is meaningful
-          // ("Alice shared 'Designs' with you") rather than a generic ping.
-          if (payload.eventType !== "INSERT") return;
-          const row = payload.new as {
-            folder_id: string;
-            shared_with_user_id: string;
-          };
-          if (row.shared_with_user_id !== user.id) return;
-
-          (async () => {
-            const { data: folder } = await supabase
-              .from("folders")
-              .select("name, icon, owner_id")
-              .eq("id", row.folder_id)
-              .maybeSingle();
-            if (!folder) return;
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("display_name, username")
-              .eq("user_id", folder.owner_id)
-              .maybeSingle();
-            const who =
-              profile?.display_name || profile?.username || "Someone";
-            toast.success(`${who} shared a folder with you`, {
-              description: `${folder.icon || "📁"} ${folder.name}`,
-              action: {
-                label: "Open",
-                onClick: () => {
-                  navigate({ to: '/folders/$folderId', params: { folderId: row.folder_id } });
-                },
-              },
-            });
-          })();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      if (t) clearTimeout(t);
-      supabase.removeChannel(sub);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
-
-  const fetchFolders = async () => {
+  const loadPublicLink = async () => {
     const { data } = await supabase
-      .from("folders")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (!data) return;
-
-    setFolders(
-      data.map((row) => ({
-        id: row.id,
-        name: row.name,
-        icon: row.icon,
-        owner_id: row.owner_id,
-        created_at: row.created_at,
-        cover: (row.cover as unknown as FolderCover | null) ?? null,
-      }))
-    );
-
-    if (data.length === 0) {
-      setFileCounts({});
-      setFolderFiles({});
-      return;
+      .from("folder_public_shares")
+      .select("token, expires_at")
+      .eq("folder_id", folder.id)
+      .maybeSingle();
+    if (data && new Date(data.expires_at).getTime() > Date.now()) {
+      setPublicLink(`${window.location.origin}/share/${data.token}`);
     }
+  };
 
-    const folderIds = data.map((folder) => folder.id);
+  // Live search as user types
+  useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!searchQ.trim()) { setSearchResults([]); return; }
+    searchTimeout.current = setTimeout(async () => {
+      setSearching(true);
+      const { data } = await supabase.rpc("list_workspace_users");
+      const q = searchQ.toLowerCase();
+      const filtered = ((data ?? []) as any[])
+        .filter((u: any) =>
+          u.user_id !== user?.id &&
+          !members.find((m) => m.user_id === u.user_id) &&
+          ((u.display_name ?? "").toLowerCase().includes(q) ||
+           (u.username ?? "").toLowerCase().includes(q))
+        )
+        .slice(0, 6);
+      setSearchResults(filtered);
+      setSearching(false);
+    }, 300);
+  }, [searchQ, members]);
 
-    // Fetch ALL files in one query (sorted newest first).
-    // We use this for both the count and the chip's prev/next navigation.
-    const { data: fileRows } = await supabase
-      .from("folder_files")
-      .select("id, folder_id, file_name, mime_type, storage_path, size_bytes, created_at")
-      .in("folder_id", folderIds)
-      .order("created_at", { ascending: false });
-
-    const counts = folderIds.reduce<Record<string, number>>((acc, id) => {
-      acc[id] = 0;
-      return acc;
-    }, {});
-
-    const grouped: Record<string, LatestFile[]> = {};
-    fileRows?.forEach((row) => {
-      counts[row.folder_id] = (counts[row.folder_id] ?? 0) + 1;
-      if (!grouped[row.folder_id]) grouped[row.folder_id] = [];
-      grouped[row.folder_id].push({
-        id: row.id,
-        file_name: row.file_name,
-        mime_type: row.mime_type,
-        storage_path: row.storage_path,
-        size_bytes: row.size_bytes ?? 0,
-      });
+  const addMember = async (u: typeof searchResults[0]) => {
+    setAdding(true);
+    const { error } = await supabase.from("folder_shares").insert({
+      folder_id: folder.id,
+      shared_with_user_id: u.user_id,
+      role: "viewer",
     });
-
-    setFileCounts(counts);
-
-    // Sign image thumbnails for the FIRST (latest) file of each folder
-    // so the initial chip view shows a real image preview without delay.
-    // Other indexes get signed lazily on navigation.
-    const firstImageEntries = Object.entries(grouped).filter(
-      ([, files]) => files[0]?.mime_type?.startsWith("image/")
-    );
-    await Promise.all(
-      firstImageEntries.map(async ([folderId, files]) => {
-        const first = files[0];
-        const { data: signed } = await supabase.storage
-          .from("folder-files")
-          .createSignedUrl(first.storage_path, 600);
-        if (signed?.signedUrl) {
-          grouped[folderId] = [{ ...first, thumbUrl: signed.signedUrl }, ...files.slice(1)];
-        }
-      })
-    );
-
-    setFolderFiles(grouped);
+    if (error) toast.error(error.message);
+    else { toast.success(`Shared with ${u.display_name || u.username}`); await loadMembers(); }
+    setSearchQ("");
+    setSearchResults([]);
+    setAdding(false);
   };
 
-  const fetchShares = async () => {
-    const { data } = await supabase.from("folder_shares").select("*");
-    if (data) setShares(data);
+  const removeMember = async (shareId: string, name: string) => {
+    const { error } = await supabase.from("folder_shares").delete().eq("id", shareId);
+    if (error) toast.error(error.message);
+    else { toast.success(`Removed ${name}`); await loadMembers(); }
   };
 
-  const handleDropFiles = async (folderId: string, fileList: FileList) => {
-    if (!fileList.length) {
-      toast.error("Choose at least one file to upload");
-      return;
+  const generatePublicLink = async () => {
+    setGeneratingLink(true);
+    const { data, error } = await supabase.rpc("regen_share_token", {
+      _folder_id: folder.id,
+      _expires_in: "100 years",
+    });
+    setGeneratingLink(false);
+    if (error || !data?.[0]) { toast.error("Could not generate link"); return; }
+    const link = `${window.location.origin}/share/${data[0].token}`;
+    setPublicLink(link);
+    await navigator.clipboard.writeText(link).catch(() => {});
+    toast.success("Public link created and copied!");
+  };
+
+  const copyLink = async () => {
+    if (!publicLink) return;
+    await navigator.clipboard.writeText(publicLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success("Link copied!");
+  };
+
+  const revokeLink = async () => {
+    await supabase.from("folder_public_shares").delete().eq("folder_id", folder.id);
+    setPublicLink(null);
+    toast.success("Public link revoked");
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center px-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="fixed inset-0 bg-black/50" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="glass-strong w-full max-w-md rounded-2xl shadow-2xl relative z-10 overflow-hidden"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="p-5 border-b border-border/30">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <Share2 size={16} className="text-primary" />
+              Share "{folder.name}"
+            </h2>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted/60 text-muted-foreground">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* People search */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+              Share with people
+            </label>
+            <div className="relative">
+              <input
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                placeholder="Search by name or username…"
+                className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/40 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                autoComplete="off"
+              />
+              {searching && (
+                <Loader2 size={14} className="absolute right-3 top-3 animate-spin text-muted-foreground" />
+              )}
+              {/* Dropdown results */}
+              {searchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 glass-strong rounded-xl shadow-xl overflow-hidden z-10">
+                  {searchResults.map((u) => (
+                    <button
+                      key={u.user_id}
+                      onClick={() => addMember(u)}
+                      disabled={adding}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 w-full text-left transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold overflow-hidden shrink-0">
+                        {u.avatar_url
+                          ? <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                          : (u.display_name || u.username || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{u.display_name || u.username}</div>
+                        {u.username && u.display_name && (
+                          <div className="text-xs text-muted-foreground">@{u.username}</div>
+                        )}
+                      </div>
+                      <span className="ml-auto text-xs text-primary font-medium">Add</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Current members */}
+          {members.length > 0 && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block flex items-center gap-1">
+                <Users size={11} /> People with access
+              </label>
+              <div className="space-y-1">
+                {/* Owner */}
+                <div className="flex items-center gap-3 px-3 py-2 rounded-xl">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold shrink-0">
+                    You
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">You (owner)</div>
+                  </div>
+                  <Lock size={13} className="text-muted-foreground" />
+                </div>
+                {members.map((m) => (
+                  <div key={m.share_id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted/30 group">
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold overflow-hidden shrink-0">
+                      {m.avatar_url
+                        ? <img src={m.avatar_url} alt="" className="w-full h-full object-cover" />
+                        : (m.display_name || m.username || "?").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{m.display_name || m.username}</div>
+                      <div className="text-xs text-muted-foreground capitalize">{m.role}</div>
+                    </div>
+                    <button
+                      onClick={() => removeMember(m.share_id, m.display_name || m.username || "user")}
+                      className="p-1 rounded-lg hover:bg-destructive/10 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remove access"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Public link */}
+          <div className="border-t border-border/30 pt-4">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 block flex items-center gap-1">
+              <Globe size={11} /> Anyone with the link
+            </label>
+            {publicLink ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={publicLink}
+                    className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-muted/40 border border-border/30 text-xs font-mono outline-none"
+                  />
+                  <button
+                    onClick={copyLink}
+                    className="p-2.5 rounded-xl gradient-accent text-white shrink-0 transition-all"
+                    title="Copy link"
+                  >
+                    {copied ? <Check size={15} /> : <Copy size={15} />}
+                  </button>
+                </div>
+                <button onClick={revokeLink} className="text-xs text-destructive hover:underline">
+                  Revoke link
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={generatePublicLink}
+                disabled={generatingLink}
+                className="flex items-center gap-2 w-full px-4 py-2.5 rounded-xl border border-dashed border-border/50 hover:border-primary/40 hover:bg-primary/5 text-sm text-muted-foreground hover:text-foreground transition-all disabled:opacity-50"
+              >
+                {generatingLink ? <Loader2 size={15} className="animate-spin" /> : <Link2 size={15} />}
+                {generatingLink ? "Generating…" : "Create shareable link"}
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+}
+
+// ── Context Menu ─────────────────────────────────────────────────────────────
+function FileMenu({
+  file,
+  pos,
+  onClose,
+  onPreview,
+  onDownload,
+  onDelete,
+  onShare,
+}: {
+  file: DriveFile;
+  pos: { x: number; y: number };
+  onClose: () => void;
+  onPreview: () => void;
+  onDownload: () => void;
+  onDelete: () => void;
+  onShare: () => void;
+}) {
+  useEffect(() => {
+    const h = () => onClose();
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const style: React.CSSProperties = {
+    position: "fixed",
+    top: Math.min(pos.y, window.innerHeight - 200),
+    left: Math.min(pos.x, window.innerWidth - 200),
+    zIndex: 99999,
+  };
+
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      style={style}
+      className="glass-strong rounded-xl shadow-2xl overflow-hidden w-48"
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {[
+        { icon: FileIcon, label: "Open / Preview", action: onPreview },
+        { icon: Download, label: "Download", action: onDownload },
+        { icon: Share2, label: "Share file", action: onShare },
+        { icon: Trash2, label: "Delete", action: onDelete, danger: true },
+      ].map(({ icon: Icon, label, action, danger }) => (
+        <button
+          key={label}
+          onClick={() => { action(); onClose(); }}
+          className={`flex items-center gap-3 px-4 py-2.5 w-full text-sm hover:bg-muted/50 transition-colors ${danger ? "text-destructive" : "text-foreground"}`}
+        >
+          <Icon size={14} />
+          {label}
+        </button>
+      ))}
+    </motion.div>,
+    document.body
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+function DrivePage() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [folders, setFolders] = useState<DriveFolder[]>([]);
+  const [files, setFiles] = useState<DriveFile[]>([]);
+  const [currentFolder, setCurrentFolder] = useState<DriveFolder | null>(null);
+  const [breadcrumb, setBreadcrumb] = useState<DriveFolder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [search, setSearch] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+  const [shareFolder, setShareFolder] = useState<DriveFolder | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ file: DriveFile; x: number; y: number } | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [newFolderName, setNewFolderName] = useState("");
+  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
+  const [dragOver, setDragOver] = useState(false);
+
+  // Load content whenever currentFolder changes
+  useEffect(() => {
+    if (!user) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, currentFolder?.id]);
+
+  const load = async () => {
+    setLoading(true);
+    setSelected(new Set());
+
+    // Load subfolders
+    const { data: folderData } = await supabase
+      .from("folders")
+      .select("id, name, icon, owner_id, created_at")
+      .order("name", { ascending: true });
+
+    // Load files in current folder (or root = null)
+    let fileQuery = supabase
+      .from("folder_files")
+      .select("id, file_name, size_bytes, mime_type, storage_path, created_at, folder_id")
+      .order("created_at", { ascending: false });
+
+    if (currentFolder) {
+      fileQuery = fileQuery.eq("folder_id", currentFolder.id);
     }
-    setUploadingFolderId(folderId);
-    const files = Array.from(fileList);
-    let okCount = 0;
-    try {
-      for (const file of files) {
-        try {
-          await uploadFileToFolder({ folderId, file });
-          okCount += 1;
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : "Upload failed";
-          toast.error(`${file.name}: ${msg}`);
-        }
-      }
-      if (okCount > 0) {
-        toast.success(`Uploaded ${okCount} file${okCount === 1 ? "" : "s"}`);
-      }
-      await fetchFolders();
-    } finally {
-      setUploadingFolderId(null);
-      setDragOverFolderId(null);
+
+    const [{ data: fd }, { data: fileData }] = await Promise.all([
+      folderData ? Promise.resolve({ data: folderData }) : supabase.from("folders").select("*"),
+      fileQuery,
+    ]);
+
+    // Filter folders: show mine + shared with me
+    const myFolders = (folderData ?? []).filter((f) => {
+      if (currentFolder) return false; // inside a folder, no subfolders for now
+      return true;
+    });
+    setFolders(myFolders as DriveFolder[]);
+    setFiles((fileData ?? []) as DriveFile[]);
+    setLoading(false);
+
+    // Sign image thumbnails
+    const images = (fileData ?? []).filter((f) => f.mime_type?.startsWith("image/") && !thumbs[f.id]);
+    if (images.length) {
+      const entries = await Promise.all(
+        images.map(async (f) => {
+          const { data } = await supabase.storage.from(BUCKET).createSignedUrl(f.storage_path, 600);
+          return [f.id, data?.signedUrl] as const;
+        })
+      );
+      setThumbs((prev) => {
+        const next = { ...prev };
+        entries.forEach(([id, url]) => { if (url) next[id] = url; });
+        return next;
+      });
+    }
+  };
+
+  const openFolder = (folder: DriveFolder) => {
+    setBreadcrumb((b) => [...b, currentFolder].filter(Boolean) as DriveFolder[]);
+    setCurrentFolder(folder);
+  };
+
+  const navigateBreadcrumb = (index: number) => {
+    if (index === -1) {
+      setCurrentFolder(null);
+      setBreadcrumb([]);
+    } else {
+      const target = breadcrumb[index];
+      setBreadcrumb((b) => b.slice(0, index));
+      setCurrentFolder(target);
     }
   };
 
   const createFolder = async () => {
-    if (!user) {
-      toast.error("Please sign in first");
-      return;
-    }
-    if (!newFolderName.trim()) {
-      toast.error("Enter a folder name");
-      return;
-    }
+    if (!newFolderName.trim() || !user) return;
     setCreatingFolder(true);
     const { error } = await supabase.from("folders").insert({
       name: newFolderName.trim(),
       owner_id: user.id,
+      icon: "📁",
     });
     setCreatingFolder(false);
-    if (error) {
-      toast.error(error.message || "Failed to create folder");
-    } else {
-      setNewFolderName("");
-      setShowCreate(false);
-      fetchFolders();
-      toast.success("Folder created!");
-    }
+    if (error) { toast.error(error.message); return; }
+    setNewFolderName("");
+    setShowNewFolder(false);
+    toast.success("Folder created");
+    load();
   };
 
-  const deleteFolder = async (id: string) => {
-    setDeletingFolderId(id);
-    const { error } = await supabase.from("folders").delete().eq("id", id);
-    setDeletingFolderId(null);
-    if (error) {
-      toast.error(error.message || "Failed to delete folder");
-    } else {
-      fetchFolders();
-      toast.success("Folder deleted");
+  const uploadFiles = async (fileList: FileList) => {
+    if (!fileList.length || !user) return;
+    setUploading(true);
+    let done = 0;
+    for (const file of Array.from(fileList)) {
+      try {
+        const ext = file.name.split(".").pop();
+        const path = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        await uploadResumable({
+          bucket: BUCKET,
+          path,
+          file,
+          onProgress: (pct) => setUploadProgress(Math.round((done / fileList.length + pct / 100 / fileList.length) * 100)),
+        });
+        await supabase.from("folder_files").insert({
+          folder_id: currentFolder?.id ?? null,
+          file_name: file.name,
+          size_bytes: file.size,
+          mime_type: file.type || null,
+          storage_path: path,
+        });
+        done++;
+      } catch (e: any) {
+        toast.error(`${file.name}: ${e?.message ?? "Upload failed"}`);
+      }
     }
+    setUploading(false);
+    setUploadProgress(0);
+    toast.success(`Uploaded ${done} file${done !== 1 ? "s" : ""}`);
+    load();
   };
 
-  const shareFolder = async (folderId: string) => {
-    if (!shareEmail.trim()) {
-      toast.error("Enter a name to share with");
-      return;
-    }
-    setSharingBusyFolderId(folderId);
-    const { data: profiles, error: lookupError } = await supabase
-      .from("profiles")
-      .select("user_id")
-      .ilike("display_name", `%${shareEmail.trim()}%`);
-
-    if (lookupError) {
-      setSharingBusyFolderId(null);
-      toast.error(lookupError.message || "Could not search users");
-      return;
-    }
-
-    if (!profiles || profiles.length === 0) {
-      setSharingBusyFolderId(null);
-      toast.error("User not found");
-      return;
-    }
-
-    const { error } = await supabase.from("folder_shares").insert({
-      folder_id: folderId,
-      shared_with_user_id: profiles[0].user_id,
-      role: "viewer",
-    });
-    setSharingBusyFolderId(null);
-
-    if (error) {
-      toast.error(error.message.includes("duplicate") ? "Already shared with this user" : error.message || "Failed to share");
-    } else {
-      setShareEmail("");
-      setSharingFolderId(null);
-      fetchShares();
-      toast.success("Folder shared!");
-    }
+  const downloadFile = async (file: DriveFile) => {
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(file.storage_path, 60, { download: file.file_name });
+    if (error || !data?.signedUrl) { toast.error("Download failed"); return; }
+    const a = document.createElement("a");
+    a.href = data.signedUrl;
+    a.download = file.file_name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
-  const saveCover = async (folderId: string, cover: FolderCover | null) => {
-    // Optimistic update so the picker preview feels instant.
-    setFolders((prev) => prev.map((f) => (f.id === folderId ? { ...f, cover } : f)));
-    const { error } = await supabase
-      .from("folders")
-      .update({ cover: cover as unknown as never })
-      .eq("id", folderId);
-    if (error) {
-      toast.error(error.message || "Failed to save cover");
-      fetchFolders();
-    }
+  const deleteFile = async (file: DriveFile) => {
+    if (!confirm(`Delete "${file.file_name}"?`)) return;
+    await supabase.storage.from(BUCKET).remove([file.storage_path]);
+    await supabase.from("folder_files").delete().eq("id", file.id);
+    toast.success("Deleted");
+    load();
   };
 
-  const myFolders = folders.filter((f) => f.owner_id === user?.id);
-  const sharedWithMe = folders.filter(
-    (f) => f.owner_id !== user?.id && shares.some((s) => s.folder_id === f.id)
-  );
+  const deleteFolder = async (folder: DriveFolder) => {
+    if (!confirm(`Delete folder "${folder.name}" and all its files?`)) return;
+    await supabase.from("folders").delete().eq("id", folder.id);
+    toast.success("Folder deleted");
+    load();
+  };
+
+  const deleteSelected = async () => {
+    if (!selected.size) return;
+    if (!confirm(`Delete ${selected.size} item(s)?`)) return;
+    const toDelete = files.filter((f) => selected.has(f.id));
+    await supabase.storage.from(BUCKET).remove(toDelete.map((f) => f.storage_path));
+    await supabase.from("folder_files").delete().in("id", Array.from(selected));
+    setSelected(new Set());
+    toast.success(`Deleted ${toDelete.length} file(s)`);
+    load();
+  };
+
+  // Share a single file — generate a public link via folder share mechanism
+  const shareFile = async (file: DriveFile) => {
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(file.storage_path, 60 * 60 * 24 * 7); // 7-day signed URL
+    if (error || !data?.signedUrl) { toast.error("Could not generate link"); return; }
+    await navigator.clipboard.writeText(data.signedUrl).catch(() => {});
+    toast.success("7-day file link copied to clipboard!", { description: file.file_name });
+  };
+
+  // Filter
+  const q = search.toLowerCase();
+  const filteredFolders = folders.filter((f) => !q || f.name.toLowerCase().includes(q));
+  const filteredFiles = files.filter((f) => !q || f.file_name.toLowerCase().includes(q));
+
+  // Drag & drop handlers
+  const onDragEnter = (e: React.DragEvent) => { e.preventDefault(); dragCounter.current++; setDragOver(true); };
+  const onDragLeave = (e: React.DragEvent) => { e.preventDefault(); dragCounter.current--; if (dragCounter.current === 0) setDragOver(false); };
+  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); };
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragOver(false);
+    if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+  };
+
+  const isEmpty = filteredFolders.length === 0 && filteredFiles.length === 0 && !loading;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 md:px-8 py-6 md:py-10">
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-      >
-        <div className="flex items-start sm:items-center justify-between gap-3 mb-6 flex-col sm:flex-row">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <FolderLock size={24} className="text-primary" />
-              Folders
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Organize and share your private folders
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowCreate(!showCreate)}
-            className="pill-button gradient-accent text-white flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
+    <div
+      className="h-full flex flex-col relative"
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      {/* Drag overlay */}
+      <AnimatePresence>
+        {dragOver && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 bg-primary/10 border-2 border-dashed border-primary/50 rounded-2xl flex items-center justify-center pointer-events-none"
           >
-            <Plus size={16} /> New Folder
+            <div className="text-center">
+              <Upload size={40} className="mx-auto mb-2 text-primary" />
+              <p className="text-lg font-semibold text-primary">Drop files to upload</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-border/30 flex items-center gap-3 flex-wrap shrink-0">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1 flex-1 min-w-0">
+          <button
+            onClick={() => navigateBreadcrumb(-1)}
+            className="flex items-center gap-1.5 text-sm font-medium hover:text-primary transition-colors"
+          >
+            <Home size={15} />
+            <span className={currentFolder ? "text-muted-foreground" : "text-foreground"}>My Drive</span>
           </button>
+          {breadcrumb.map((b, i) => (
+            <span key={b.id} className="flex items-center gap-1">
+              <ChevronRight size={13} className="text-muted-foreground" />
+              <button
+                onClick={() => navigateBreadcrumb(i)}
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                {b.name}
+              </button>
+            </span>
+          ))}
+          {currentFolder && (
+            <span className="flex items-center gap-1">
+              <ChevronRight size={13} className="text-muted-foreground" />
+              <span className="text-sm font-medium text-foreground">{currentFolder.name}</span>
+            </span>
+          )}
         </div>
 
-        {/* Create folder */}
-        <AnimatePresence>
-          {showCreate && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden mb-4"
-            >
-              <div className="glass p-4 flex items-center gap-3">
-                <FolderOpen size={18} className="text-muted-foreground" />
-                <input
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  placeholder="Folder name"
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
-                  onKeyDown={(e) => e.key === "Enter" && createFolder()}
-                />
-                <button
-                  type="button"
-                  onClick={createFolder}
-                  disabled={creatingFolder}
-                  className="px-4 py-1.5 rounded-lg gradient-accent text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {creatingFolder ? "Creating…" : "Create"}
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Search */}
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search files…"
+            className="pl-9 pr-4 py-2 rounded-xl bg-muted/50 border border-border/30 text-sm outline-none focus:ring-2 focus:ring-primary/30 w-48"
+          />
+        </div>
 
-        {/* My folders */}
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-          <Lock size={14} /> My Folders
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
-          {myFolders.map((folder, i) => {
-            const count = fileCounts[folder.id] ?? 0;
-            const isDraggingOver = dragOverFolderId === folder.id;
-            const isUploading = uploadingFolderId === folder.id;
-            return (
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setView((v) => v === "grid" ? "list" : "grid")}
+            className="p-2 rounded-xl hover:bg-muted/60 text-muted-foreground"
+            title={view === "grid" ? "List view" : "Grid view"}
+          >
+            {view === "grid" ? <List size={17} /> : <Grid3X3 size={17} />}
+          </button>
+          <button
+            onClick={() => setShowNewFolder(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted/50 border border-border/30 text-sm hover:bg-muted/80 transition-colors"
+          >
+            <FolderPlus size={15} />
+            <span className="hidden sm:inline">New folder</span>
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl gradient-accent text-white text-sm font-medium disabled:opacity-60"
+          >
+            {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+            {uploading ? `${uploadProgress}%` : "Upload"}
+          </button>
+          <input ref={fileInputRef} type="file" multiple className="sr-only" onChange={(e) => { if (e.target.files?.length) { uploadFiles(e.target.files); e.target.value = ""; } }} />
+        </div>
+      </div>
+
+      {/* New folder inline */}
+      <AnimatePresence>
+        {showNewFolder && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-b border-border/30"
+          >
+            <div className="px-6 py-3 flex items-center gap-3 bg-muted/20">
+              <FolderOpen size={16} className="text-primary shrink-0" />
+              <input
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="Folder name"
+                autoFocus
+                className="flex-1 bg-transparent text-sm outline-none"
+                onKeyDown={(e) => { if (e.key === "Enter") createFolder(); if (e.key === "Escape") setShowNewFolder(false); }}
+              />
+              <button onClick={createFolder} disabled={creatingFolder || !newFolderName.trim()} className="px-3 py-1.5 rounded-lg gradient-accent text-white text-xs font-medium disabled:opacity-50">
+                {creatingFolder ? "Creating…" : "Create"}
+              </button>
+              <button onClick={() => setShowNewFolder(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                <X size={14} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bulk actions bar */}
+      <AnimatePresence>
+        {selected.size > 0 && (
+          <motion.div
+            initial={{ y: -40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -40, opacity: 0 }}
+            className="px-6 py-2 border-b border-border/30 bg-primary/5 flex items-center gap-3"
+          >
+            <span className="text-sm font-medium">{selected.size} selected</span>
+            <button onClick={deleteSelected} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs font-medium">
+              <Trash2 size={13} /> Delete
+            </button>
+            <button onClick={() => setSelected(new Set())} className="ml-auto p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        {loading ? (
+          <div className="flex items-center justify-center h-40">
+            <Loader2 size={24} className="animate-spin text-muted-foreground" />
+          </div>
+        ) : isEmpty ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-muted/40 flex items-center justify-center mb-4">
+              <FolderOpen size={28} className="text-muted-foreground/50" />
+            </div>
+            <p className="text-foreground font-medium mb-1">
+              {search ? "No results found" : "This folder is empty"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {search ? "Try a different search term" : "Upload files or create a folder to get started"}
+            </p>
+          </div>
+        ) : view === "grid" ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {/* Folders */}
+            {filteredFolders.map((folder) => (
               <motion.div
                 key={folder.id}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.04 }}
-                onDragOver={(e) => {
-                  if (!e.dataTransfer.types.includes("Files")) return;
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "copy";
-                  if (dragOverFolderId !== folder.id) setDragOverFolderId(folder.id);
-                }}
-                onDragLeave={(e) => {
-                  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-                  setDragOverFolderId((cur) => (cur === folder.id ? null : cur));
-                }}
-                onDrop={(e) => {
-                  if (!e.dataTransfer.files.length) return;
-                  e.preventDefault();
-                  handleDropFiles(folder.id, e.dataTransfer.files);
-                }}
-                className={`group relative flex flex-col items-center gap-2 p-4 rounded-2xl cursor-pointer select-none transition-all duration-150
-                  hover:bg-muted/40 active:scale-95
-                  ${isDraggingOver ? "bg-primary/10 ring-2 ring-primary/40" : ""}
-                `}
-                onClick={() => navigate({ to: "/folders/$folderId", params: { folderId: folder.id } })}
+                className="group relative"
               >
-                {/* Drop overlay */}
-                {(isDraggingOver || isUploading) && (
-                  <div className="absolute inset-0 z-10 rounded-2xl bg-primary/10 flex items-center justify-center pointer-events-none">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/90 border border-border/50 text-xs font-medium text-foreground shadow">
-                      {isUploading ? <><Loader2 size={12} className="animate-spin text-primary" />Uploading…</> : <><Upload size={12} className="text-primary" />Drop files</>}
-                    </div>
-                  </div>
-                )}
-
-                {/* Big folder icon — whole card is clickable via motion.div onClick */}
-                <div className="flex flex-col items-center gap-2 w-full">
-                  {/* Folder SVG — Windows/macOS style */}
-                  <div className="relative w-20 h-16 drop-shadow-md">
-                    <svg viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-                      {/* Folder back */}
+                <button
+                  className="w-full flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-muted/50 transition-colors cursor-pointer"
+                  onDoubleClick={() => openFolder(folder)}
+                  onClick={() => openFolder(folder)}
+                >
+                  <div className="relative">
+                    <svg viewBox="0 0 80 60" className="w-16 h-12 drop-shadow">
                       <rect x="2" y="14" width="76" height="44" rx="5" fill="#F59E0B" opacity="0.9"/>
-                      {/* Folder tab */}
                       <path d="M2 14 Q2 10 6 10 L28 10 Q32 10 34 14 Z" fill="#FBBF24"/>
-                      {/* Folder front highlight */}
-                      <rect x="2" y="18" width="76" height="40" rx="4" fill="#FCD34D" opacity="0.6"/>
-                      {/* Icon overlay */}
-                      <text x="40" y="44" textAnchor="middle" fontSize="20" fill="rgba(180,90,0,0.5)">{folder.icon}</text>
+                      <rect x="2" y="18" width="76" height="40" rx="4" fill="#FCD34D" opacity="0.55"/>
+                      <text x="40" y="44" textAnchor="middle" fontSize="18" fill="rgba(146,64,14,0.6)">{folder.icon}</text>
                     </svg>
-                    {/* File count badge */}
-                    {count > 0 && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow">
-                        {count > 99 ? "99+" : count}
-                      </div>
+                  </div>
+                  <span className="text-xs font-medium text-foreground text-center truncate w-full">{folder.name}</span>
+                </button>
+                {/* Folder actions */}
+                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                  <button onClick={(e) => { e.stopPropagation(); setShareFolder(folder); }} className="p-1.5 rounded-lg bg-background/80 hover:bg-primary/10 text-primary" title="Share">
+                    <Share2 size={11} />
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); deleteFolder(folder); }} className="p-1.5 rounded-lg bg-background/80 hover:bg-destructive/10 text-destructive" title="Delete">
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+
+            {/* Files */}
+            {filteredFiles.map((file) => {
+              const Icon = fileIcon(file.mime_type);
+              const thumb = thumbs[file.id];
+              const isSelected = selected.has(file.id);
+              return (
+                <motion.div
+                  key={file.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={`group relative rounded-2xl overflow-hidden border transition-all cursor-pointer ${
+                    isSelected ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-transparent hover:border-border/40 hover:bg-muted/30"
+                  }`}
+                  onClick={() => setSelected((s) => { const n = new Set(s); n.has(file.id) ? n.delete(file.id) : n.add(file.id); return n; })}
+                  onDoubleClick={() => setPreviewFile(file as PreviewFile)}
+                  onContextMenu={(e) => { e.preventDefault(); setContextMenu({ file, x: e.clientX, y: e.clientY }); }}
+                >
+                  {/* Thumbnail */}
+                  <div className="aspect-square bg-muted/30 flex items-center justify-center overflow-hidden">
+                    {thumb ? (
+                      <img src={thumb} alt={file.file_name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Icon size={28} className="text-primary/60" />
                     )}
                   </div>
-                  {/* Folder name */}
-                  <span className="text-xs font-medium text-foreground text-center leading-tight max-w-full px-1 truncate w-full text-center">
-                    {folder.name}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">{formatItemCount(count)}</span>
-                </div>
-
-                {/* Action buttons — only visible on hover, don't intercept folder click */}
-                <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <input
-                    type="file"
-                    multiple
-                    className="sr-only"
-                    id={`upload-input-${folder.id}`}
-                    onChange={(e) => {
-                      if (e.target.files?.length) {
-                        handleDropFiles(folder.id, e.target.files);
-                        e.target.value = "";
-                      }
-                    }}
-                  />
-                  <label
-                    htmlFor={`upload-input-${folder.id}`}
-                    className="p-1 rounded-md bg-background/80 hover:bg-primary/10 text-primary cursor-pointer"
-                    title="Upload files"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Upload size={12} />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSharingFolderId(sharingFolderId === folder.id ? null : folder.id); }}
-                    className="p-1 rounded-md bg-background/80 hover:bg-muted text-muted-foreground hover:text-foreground"
-                    title="Share folder"
-                  >
-                    <Share2 size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteFolder(folder.id); }}
-                    disabled={deletingFolderId === folder.id}
-                    className="p-1 rounded-md bg-background/80 hover:bg-destructive/10 text-destructive disabled:opacity-60"
-                    title="Delete folder"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-
-                {/* Share panel — pops below the card */}
-                <AnimatePresence>
-                  {sharingFolderId === folder.id && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      className="absolute top-full left-0 right-0 mt-1 z-20 glass rounded-xl p-3 shadow-xl"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={shareEmail}
-                          onChange={(e) => setShareEmail(e.target.value)}
-                          placeholder="Search user name…"
-                          autoFocus
-                          className="flex-1 px-2.5 py-1.5 rounded-lg bg-background border border-border/60 text-xs outline-none focus:ring-2 focus:ring-primary/30"
-                          onKeyDown={(e) => e.key === "Enter" && shareFolder(folder.id)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => shareFolder(folder.id)}
-                          disabled={sharingBusyFolderId === folder.id}
-                          className="px-2.5 py-1.5 rounded-lg gradient-accent text-white text-xs font-medium disabled:opacity-60"
-                        >
-                          {sharingBusyFolderId === folder.id ? "…" : "Share"}
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            );
-          })}
-          {myFolders.length === 0 && (
-            <div className="glass p-8 text-center col-span-4">
-              <FolderLock size={36} className="mx-auto mb-3 text-muted-foreground/30" />
-              <p className="text-muted-foreground text-sm">No folders yet. Click + New Folder to create one.</p>
+                  <div className="px-2 py-1.5">
+                    <p className="text-xs font-medium text-foreground truncate">{file.file_name}</p>
+                    <p className="text-[10px] text-muted-foreground">{formatBytes(file.size_bytes)}</p>
+                  </div>
+                  {/* Hover actions */}
+                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                    <button onClick={(e) => { e.stopPropagation(); downloadFile(file); }} className="p-1.5 rounded-lg bg-background/80 hover:bg-primary/10 text-primary" title="Download">
+                      <Download size={11} />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); shareFile(file); }} className="p-1.5 rounded-lg bg-background/80 hover:bg-primary/10 text-primary" title="Share link">
+                      <Link2 size={11} />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); deleteFile(file); }} className="p-1.5 rounded-lg bg-background/80 hover:bg-destructive/10 text-destructive" title="Delete">
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        ) : (
+          /* List view */
+          <div className="space-y-0.5">
+            {/* Header */}
+            <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/20">
+              <span className="w-8" />
+              <span>Name</span>
+              <span className="w-24 text-right">Size</span>
+              <span className="w-32 text-right">Modified</span>
+              <span className="w-20" />
             </div>
-          )}
-        </div>
-
-        {/* Shared with me */}
-        {sharedWithMe.length > 0 && (
-          <>
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <Users size={14} /> Shared with me
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {sharedWithMe.map((folder, i) => {
-                const count = fileCounts[folder.id] ?? 0;
-                return (
-                  <motion.div
-                    key={folder.id}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.04 }}
-                    className="group relative flex flex-col items-center gap-2 p-4 rounded-2xl cursor-pointer select-none transition-all duration-150 hover:bg-muted/40 active:scale-95"
-                    onClick={() => navigate({ to: "/folders/$folderId", params: { folderId: folder.id } })}
-                  >
-                    {/* Same PC-style folder card for shared folders */}
-                    <div className="flex flex-col items-center gap-2 w-full">
-                      <div className="relative w-20 h-16 drop-shadow-md">
-                        <svg viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-                          <rect x="2" y="14" width="76" height="44" rx="5" fill="#60A5FA" opacity="0.9"/>
-                          <path d="M2 14 Q2 10 6 10 L28 10 Q32 10 34 14 Z" fill="#93C5FD"/>
-                          <rect x="2" y="18" width="76" height="40" rx="4" fill="#BFDBFE" opacity="0.6"/>
-                          <text x="40" y="44" textAnchor="middle" fontSize="20" fill="rgba(30,64,175,0.5)">{folder.icon}</text>
-                        </svg>
-                        {(fileCounts[folder.id] ?? 0) > 0 && (
-                          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center shadow">
-                            {(fileCounts[folder.id] ?? 0) > 99 ? "99+" : fileCounts[folder.id]}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-xs font-medium text-foreground text-center leading-tight truncate w-full text-center px-1">
-                        {folder.name}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <Share2 size={9} /> {formatItemCount(fileCounts[folder.id] ?? 0)}
-                      </span>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </>
+            {filteredFolders.map((folder) => (
+              <div
+                key={folder.id}
+                className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-3 py-2.5 items-center rounded-xl hover:bg-muted/30 group cursor-pointer transition-colors"
+                onClick={() => openFolder(folder)}
+              >
+                <svg viewBox="0 0 80 60" className="w-8 h-6">
+                  <rect x="2" y="14" width="76" height="44" rx="5" fill="#F59E0B" opacity="0.9"/>
+                  <path d="M2 14 Q2 10 6 10 L28 10 Q32 10 34 14 Z" fill="#FBBF24"/>
+                </svg>
+                <span className="text-sm font-medium truncate">{folder.name}</span>
+                <span className="w-24 text-right text-xs text-muted-foreground">—</span>
+                <span className="w-32 text-right text-xs text-muted-foreground">{new Date(folder.created_at).toLocaleDateString()}</span>
+                <div className="w-20 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={(e) => { e.stopPropagation(); setShareFolder(folder); }} className="p-1.5 rounded-lg hover:bg-primary/10 text-primary" title="Share"><Share2 size={13} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); deleteFolder(folder); }} className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive" title="Delete"><Trash2 size={13} /></button>
+                </div>
+              </div>
+            ))}
+            {filteredFiles.map((file) => {
+              const Icon = fileIcon(file.mime_type);
+              const isSelected = selected.has(file.id);
+              return (
+                <div
+                  key={file.id}
+                  className={`grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-3 py-2.5 items-center rounded-xl group cursor-pointer transition-colors ${
+                    isSelected ? "bg-primary/5 ring-1 ring-primary/20" : "hover:bg-muted/30"
+                  }`}
+                  onClick={() => setSelected((s) => { const n = new Set(s); n.has(file.id) ? n.delete(file.id) : n.add(file.id); return n; })}
+                  onDoubleClick={() => setPreviewFile(file as PreviewFile)}
+                  onContextMenu={(e) => { e.preventDefault(); setContextMenu({ file, x: e.clientX, y: e.clientY }); }}
+                >
+                  <Icon size={18} className="text-primary/70 w-8" />
+                  <span className="text-sm font-medium truncate">{file.file_name}</span>
+                  <span className="w-24 text-right text-xs text-muted-foreground">{formatBytes(file.size_bytes)}</span>
+                  <span className="w-32 text-right text-xs text-muted-foreground">{new Date(file.created_at).toLocaleDateString()}</span>
+                  <div className="w-20 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); setPreviewFile(file as PreviewFile); }} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground" title="Preview"><FileIcon size={13} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); downloadFile(file); }} className="p-1.5 rounded-lg hover:bg-primary/10 text-primary" title="Download"><Download size={13} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); shareFile(file); }} className="p-1.5 rounded-lg hover:bg-primary/10 text-primary" title="Share link"><Link2 size={13} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); deleteFile(file); }} className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive" title="Delete"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
-      </motion.div>
+      </div>
+
+      {/* File preview */}
       <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+
+      {/* Share modal */}
+      <AnimatePresence>
+        {shareFolder && (
+          <ShareModal folder={shareFolder} onClose={() => setShareFolder(null)} />
+        )}
+      </AnimatePresence>
+
+      {/* Context menu */}
+      <AnimatePresence>
+        {contextMenu && (
+          <FileMenu
+            file={contextMenu.file}
+            pos={{ x: contextMenu.x, y: contextMenu.y }}
+            onClose={() => setContextMenu(null)}
+            onPreview={() => setPreviewFile(contextMenu.file as PreviewFile)}
+            onDownload={() => downloadFile(contextMenu.file)}
+            onDelete={() => deleteFile(contextMenu.file)}
+            onShare={() => shareFile(contextMenu.file)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
