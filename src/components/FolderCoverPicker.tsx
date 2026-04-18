@@ -100,7 +100,7 @@ export function FolderCoverPicker({ folderId, cover, onChange, onClose }: Props)
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-semibold text-foreground">Folder cover</div>
+        <div className="text-xs font-semibold text-foreground">Drive cover</div>
         <button
           type="button"
           onClick={onClose}

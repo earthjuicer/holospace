@@ -28,7 +28,7 @@ export const Route = createFileRoute("/folders/$folderId")({
     upload: search.upload === 1 || search.upload === "1" ? 1 : undefined,
   }),
   head: () => ({
-    meta: [{ title: "Folder — Workspace" }],
+    meta: [{ title: "Drive — Workspace" }],
   }),
   component: FolderDetailPage,
 });
@@ -107,7 +107,7 @@ function FolderDetailPage() {
         if (!cancelled) {
           setFolder(null);
           setShare(null);
-          toast.error(error instanceof Error ? error.message : "Failed to load folder");
+          toast.error(error instanceof Error ? error.message : "Failed to load drive");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -168,7 +168,7 @@ function FolderDetailPage() {
   // page will return "not found" the moment this completes, so anyone holding
   // the old link can no longer view, download, or upload to this folder.
   const stopSharing = async () => {
-    if (!confirm("Stop sharing this folder? The current link will stop working immediately.")) return;
+    if (!confirm("Stop sharing this drive? The current link will stop working immediately.")) return;
     const { error } = await supabase
       .from("folder_public_shares")
       .delete()
@@ -191,12 +191,12 @@ function FolderDetailPage() {
   };
 
   const deleteFolder = async () => {
-    if (!confirm(`Delete folder "${folder?.name}" and all its files?`)) return;
+    if (!confirm(`Delete drive "${folder?.name}" and all its files?`)) return;
     const { error } = await supabase.from("folders").delete().eq("id", folderId);
     if (error) {
-      toast.error(error.message || "Failed to delete folder");
+      toast.error(error.message || "Failed to delete drive");
     } else {
-      toast.success("Folder deleted");
+      toast.success("Drive deleted");
       navigate({ to: "/folders" });
     }
   };
@@ -215,7 +215,7 @@ function FolderDetailPage() {
         <Link to="/folders" className="text-sm text-primary">
           ← Back
         </Link>
-        <p className="mt-4 text-muted-foreground">Folder not found.</p>
+        <p className="mt-4 text-muted-foreground">Drive not found.</p>
       </div>
     );
   }
@@ -226,7 +226,7 @@ function FolderDetailPage() {
         to="/folders"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
       >
-        <ArrowLeft size={14} /> Folders
+        <ArrowLeft size={14} /> Drive
       </Link>
 
       <motion.div
@@ -240,7 +240,7 @@ function FolderDetailPage() {
             <div>
               <h1 className="text-2xl font-bold text-foreground">{folder.name}</h1>
               <p className="text-xs text-muted-foreground">
-                {isOwner ? "You own this folder" : "Shared with you"}
+                {isOwner ? "You own this drive" : "Shared with you"}
               </p>
             </div>
           </div>
@@ -248,7 +248,7 @@ function FolderDetailPage() {
             <button
               onClick={deleteFolder}
               className="p-2 rounded-lg hover:bg-destructive/10 text-destructive"
-              title="Delete folder"
+              title="Delete drive"
             >
               <Trash2 size={16} />
             </button>
@@ -293,7 +293,7 @@ function FolderDetailPage() {
                     onClick={stopSharing}
                     className="p-2 rounded-lg hover:bg-destructive/10 text-destructive shrink-0"
                     title="Stop sharing"
-                    aria-label="Stop sharing folder"
+                    aria-label="Stop sharing drive"
                   >
                     <Link2Off size={14} />
                   </button>

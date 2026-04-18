@@ -520,7 +520,7 @@ function DrivePage() {
     if (error) { toast.error(error.message); return; }
     setNewFolderName("");
     setShowNewFolder(false);
-    toast.success("Folder created");
+    toast.success("Drive created");
     load();
   };
 
@@ -584,9 +584,9 @@ function DrivePage() {
   };
 
   const deleteFolder = async (folder: DriveFolder) => {
-    if (!confirm(`Delete folder "${folder.name}" and all its files?`)) return;
+    if (!confirm(`Delete drive "${folder.name}" and all its files?`)) return;
     await supabase.from("folders").delete().eq("id", folder.id);
-    toast.success("Folder deleted");
+    toast.success("Drive deleted");
     load();
   };
 
@@ -709,7 +709,7 @@ function DrivePage() {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted/50 border border-border/30 text-sm hover:bg-muted/80 transition-colors"
           >
             <FolderPlus size={15} />
-            <span className="hidden sm:inline">New folder</span>
+            <span className="hidden sm:inline">New drive</span>
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -737,7 +737,7 @@ function DrivePage() {
               <input
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
-                placeholder="Folder name"
+                placeholder="Drive name"
                 autoFocus
                 className="flex-1 bg-transparent text-sm outline-none"
                 onKeyDown={(e) => { if (e.key === "Enter") createFolder(); if (e.key === "Escape") setShowNewFolder(false); }}
@@ -785,10 +785,10 @@ function DrivePage() {
               <FolderOpen size={28} className="text-muted-foreground/50" />
             </div>
             <p className="text-foreground font-medium mb-1">
-              {search ? "No results found" : "This folder is empty"}
+              {search ? "No results found" : "This drive is empty"}
             </p>
             <p className="text-sm text-muted-foreground">
-              {search ? "Try a different search term" : "Upload files or create a folder to get started"}
+              {search ? "Try a different search term" : "Upload files or create a drive to get started"}
             </p>
           </div>
         ) : view === "grid" ? (

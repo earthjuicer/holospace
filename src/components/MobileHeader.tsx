@@ -12,7 +12,7 @@ const NAV_ITEMS = [
   { to: '/prompts' as const, icon: Sparkles, label: 'AI Prompts' },
   { to: '/kanban' as const, icon: Kanban, label: 'Tasks' },
   { to: '/calendar' as const, icon: Calendar, label: 'Calendar' },
-  { to: '/folders' as const, icon: FolderLock, label: 'Folders' },
+  { to: '/folders' as const, icon: FolderLock, label: 'Drive' },
   { to: '/voice' as const, icon: Volume2, label: 'Voice' },
   { to: '/settings' as const, icon: Settings, label: 'Settings' },
 ];
@@ -22,7 +22,7 @@ const TITLES: Record<string, string> = {
   '/prompts': 'AI Prompts',
   '/kanban': 'Tasks',
   '/calendar': 'Calendar',
-  '/folders': 'Folders',
+  '/folders': 'Drive',
   '/voice': 'Voice',
   '/settings': 'Settings',
 };

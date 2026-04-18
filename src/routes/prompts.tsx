@@ -570,7 +570,7 @@ function PromptsPage() {
                     <SelectContent>
                       <SelectItem value="private">🔒 Private (only me)</SelectItem>
                       {folders.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>{f.icon} Folder: {f.name}</SelectItem>
+                        <SelectItem key={f.id} value={f.id}>{f.icon} Drive: {f.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
