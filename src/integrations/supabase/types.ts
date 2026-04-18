@@ -71,7 +71,7 @@ export type Database = {
         Row: {
           created_at: string
           file_name: string
-          folder_id: string
+          folder_id: string | null
           id: string
           mime_type: string | null
           size_bytes: number
@@ -82,7 +82,7 @@ export type Database = {
         Insert: {
           created_at?: string
           file_name: string
-          folder_id: string
+          folder_id?: string | null
           id?: string
           mime_type?: string | null
           size_bytes?: number
@@ -93,7 +93,7 @@ export type Database = {
         Update: {
           created_at?: string
           file_name?: string
-          folder_id?: string
+          folder_id?: string | null
           id?: string
           mime_type?: string | null
           size_bytes?: number
