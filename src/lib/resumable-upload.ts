@@ -48,7 +48,9 @@ export async function uploadResumable({
         contentType: file.type || "application/octet-stream",
         cacheControl: "3600",
       },
-      chunkSize: 6 * 1024 * 1024, // Required: 6 MB chunks for Supabase TUS
+      // Larger chunks = fewer round-trips → much faster for big files/videos.
+      // Supabase TUS requires chunkSize to be a multiple of 6 MB.
+      chunkSize: file.size > 500 * 1024 * 1024 ? 48 * 1024 * 1024 : 6 * 1024 * 1024,
       onError: (err) => {
         if (cancelled) return; // already settled via reject below
         reject(err);
